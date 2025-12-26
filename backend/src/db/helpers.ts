@@ -58,3 +58,33 @@ export const addParticipant = async (userId: number, sessionId: number) => {
         throw error;
     }
 };
+
+export const addFile = async (sessionId: number, uploadedBy: number, fileName: string, fileType: string, fileUrl: string) => {
+    const query = `
+    INSERT INTO files (session_id, uploaded_by, file_name, file_type, file_url)
+    VALUES ($1, $2, $3, $4, $5)
+    RETURNING *;
+  `;
+    try {
+        const result = await pool.query(query, [sessionId, uploadedBy, fileName, fileType, fileUrl]);
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error adding file:', error);
+        throw error;
+    }
+};
+
+export const getFilesBySession = async (sessionId: number) => {
+    const query = `
+    SELECT * FROM files
+    WHERE session_id = $1;
+  `;
+    try {
+        const result = await pool.query(query, [sessionId]);
+        return result.rows;
+    } catch (error) {
+        console.error('Error fetching files by session:', error);
+        throw error;
+    }
+};
+
