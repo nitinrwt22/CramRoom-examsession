@@ -11,5 +11,8 @@ export const config = {
         password: process.env.DB_PASSWORD || 'postgres',
         name: process.env.DB_NAME || 'postgres',
         port: parseInt(process.env.DB_PORT || '5432', 10),
+    },
+    jwt: {
+        secret: process.env.JWT_SECRET || 'default_secret',
     }
 };
