@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import authRoutes from "./routes/auth.routes";
+import sessionRoutes from "./routes/session.routes";
+
 import { authenticateToken } from "./middleware/auth.middleware";
 
 const app = express();
@@ -16,14 +18,13 @@ app.get("/health", (_req, res) => {
 
 app.use("/auth", authRoutes); // Public auth routes (register, login)
 
-// 3. Protected Routes Middleware
-// All routes defined after this line will require a valid JWT
-app.use(authenticateToken);
-
-// 4. Protected Routes
-app.get("/session/my", (req: any, res) => {
+// 3. Protected Routes
+// Apply authentication middleware only to routes that require it
+app.get("/session/my", authenticateToken, (req: any, res) => {
     res.json({ user: req.user });
 });
+
+app.use("/session", authenticateToken, sessionRoutes);
 // Example: app.use("/api/users", userRoutes);
 
 export default app;

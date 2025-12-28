@@ -44,6 +44,38 @@ export const createSession = async (subject: string, examDate: Date, expiryTime:
     }
 };
 
+export const getSessionById = async (sessionId: number) => {
+    const query = `
+    SELECT * FROM sessions
+    WHERE id = $1;
+  `;
+    try {
+        const result = await pool.query(query, [sessionId]);
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error fetching session by ID:', error);
+        throw error;
+    }
+};
+
+
+
+export const updateSessionStatus = async (sessionId: number, status: string) => {
+    const query = `
+    UPDATE sessions
+    SET status = $2
+    WHERE id = $1
+    RETURNING *;
+  `;
+    try {
+        const result = await pool.query(query, [sessionId, status]);
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error updating session status:', error);
+        throw error;
+    }
+};
+
 export const addParticipant = async (userId: number, sessionId: number) => {
     const query = `
     INSERT INTO participants (user_id, session_id)
@@ -55,6 +87,21 @@ export const addParticipant = async (userId: number, sessionId: number) => {
         return result.rows[0];
     } catch (error) {
         console.error('Error adding participant:', error);
+        throw error;
+    }
+};
+
+export const removeParticipant = async (userId: number, sessionId: number) => {
+    const query = `
+    DELETE FROM participants
+    WHERE user_id = $1 AND session_id = $2
+    RETURNING *;
+  `;
+    try {
+        const result = await pool.query(query, [userId, sessionId]);
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error removing participant:', error);
         throw error;
     }
 };
