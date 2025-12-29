@@ -67,7 +67,7 @@ router.post('/leave', async (req: AuthRequest, res) => {
         console.error('Error in /session/leave:', error);
         if (error.message === 'Session not found') {
             res.status(404).json({ error: error.message });
-        } else if (error.message === 'User is not a participant of this session') {
+        } else if (error.message === 'User is not a participant of this session' || error.message === 'Session is expired') {
             res.status(400).json({ error: error.message });
         } else {
             res.status(500).json({ error: error.message });

@@ -112,7 +112,12 @@ export const leaveSession = async (sessionId: number, userId: number) => {
             throw new Error('Session not found');
         }
 
-        // 2. Check if user is host
+        // 2. Check if session is expired
+        if (new Date() > new Date(session.expiry_time)) {
+            throw new Error('Session is expired');
+        }
+
+        // 3. Check if user is host
         if (session.host_id === userId) {
             // Host is leaving, expire the session
             await dbHelper.updateSessionStatus(sessionId, 'expired');
@@ -121,7 +126,7 @@ export const leaveSession = async (sessionId: number, userId: number) => {
             };
         }
 
-        // 3. Not host, just remove participant
+        // 4. Not host, just remove participant
         const removedParticipant = await dbHelper.removeParticipant(userId, sessionId);
 
         if (!removedParticipant) {
