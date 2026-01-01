@@ -38,7 +38,7 @@ export const loginUser = async (email: string, password: string) => {
 
     // 3. Generate JWT token
     const token = jwt.sign(
-        { userId: user.id, email: user.email },
+        { id: user.id, email: user.email },
         config.jwt.secret || 'default_secret',
         { expiresIn: '1d' }
     );

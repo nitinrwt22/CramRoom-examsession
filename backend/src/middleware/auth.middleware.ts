@@ -10,6 +10,10 @@ export const authenticateToken = (req: AuthRequest, res: Response, next: NextFun
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
+    if (req.method === 'OPTIONS') {
+        return next();
+    }
+
     if (!token) {
         res.sendStatus(401);
         return;
