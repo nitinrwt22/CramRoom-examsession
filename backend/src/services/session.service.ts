@@ -71,6 +71,10 @@ export const joinSession = async (sessionId: number, userId: number) => {
             throw new Error('Session has expired');
         }
 
+        if (session.status !== 'active') {
+            throw new Error('Session is not active');
+        }
+
         // 3. Add user to participants
         try {
             await dbHelper.addParticipant(userId, sessionId);
