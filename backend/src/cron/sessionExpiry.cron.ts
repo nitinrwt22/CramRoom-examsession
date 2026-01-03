@@ -9,8 +9,6 @@ import pool from '../config/database';
 export const runSessionExpiryCheck = async () => {
     const client = await pool.connect();
     try {
-        console.log('Running session expiry check...');
-
         const query = `
             UPDATE sessions
             SET status = 'expired'
@@ -18,13 +16,7 @@ export const runSessionExpiryCheck = async () => {
             RETURNING id;
         `;
 
-        const result = await client.query(query);
-
-        if (result.rowCount && result.rowCount > 0) {
-            console.log(`Expired ${result.rowCount} session(s). IDs: ${result.rows.map(row => row.id).join(', ')}`);
-        } else {
-            console.log('No active sessions found needing expiry.');
-        }
+        await client.query(query);
 
     } catch (error) {
         console.error('Error running session expiry cron job:', error);
