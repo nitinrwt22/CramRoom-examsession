@@ -1,4 +1,5 @@
 import * as dbHelper from '../db/helpers';
+import pool from '../config/database';
 
 /**
  * Creates a new session and adds the host as a participant.
@@ -149,4 +150,143 @@ export const leaveSession = async (sessionId: number, userId: number) => {
         throw new Error('Failed to leave session');
     }
 };
+
+
+/**
+ * Fetches all sessions where the user is a participant.
+ * 
+ * @param userId - The ID of the user
+ * @returns List of session details with role
+ */
+export const getMySessions = async (userId: number) => {
+    const query = `
+        SELECT 
+            s.id AS "session_id",
+            s.subject,
+            s.status,
+            s.exam_date,
+            s.expiry_time,
+            CASE 
+                WHEN s.host_id = $1 THEN 'host'
+                ELSE 'participant'
+            END AS "role"
+        FROM sessions s
+        JOIN participants p ON s.id = p.session_id
+        WHERE p.user_id = $1
+        ORDER BY s.exam_date DESC;
+    `;
+
+    try {
+        const result = await pool.query(query, [userId]);
+        return result.rows;
+    } catch (error) {
+        console.error('Error fetching user sessions:', error);
+        throw new Error('Failed to fetch user sessions');
+    }
+};
+
+/**
+ * Fetches active sessions where the user is a participant.
+ * 
+ * @param userId - The ID of the user
+ * @returns List of active session details
+ */
+export const getActiveSessions = async (userId: number) => {
+    const query = `
+        SELECT 
+            s.id AS "session_id",
+            s.subject,
+            s.status,
+            s.exam_date,
+            s.expiry_time,
+            CASE 
+                WHEN s.host_id = $1 THEN 'host'
+                ELSE 'participant'
+            END AS "role"
+        FROM sessions s
+        JOIN participants p ON s.id = p.session_id
+        WHERE p.user_id = $1 AND s.status = 'active'
+        ORDER BY s.exam_date ASC;
+    `;
+
+    try {
+        const result = await pool.query(query, [userId]);
+        return result.rows;
+    } catch (error) {
+        console.error('Error fetching active sessions:', error);
+        throw new Error('Failed to fetch active sessions');
+    }
+};
+
+
+/**
+ * Fetches session details and participants if the user is a member.
+ * 
+ * @param sessionId - The ID of the session
+ * @param userId - The ID of the user requesting details
+ * @returns Session details and list of participants
+ */
+export const getSessionDetails = async (sessionId: number, userId: number) => {
+    const client = await pool.connect();
+    try {
+        // 1. Verify membership and get session details
+        // We join sessions with participants to check if the requesting user is in the session
+        const sessionQuery = `
+            SELECT 
+                s.id,
+                s.subject,
+                s.status,
+                s.exam_date,
+                s.expiry_time,
+                s.host_id,
+                s.created_at
+            FROM sessions s
+            JOIN participants p ON s.id = p.session_id
+            WHERE s.id = $1 AND p.user_id = $2;
+        `;
+
+        const sessionResult = await client.query(sessionQuery, [sessionId, userId]);
+
+        if (sessionResult.rowCount === 0) {
+            // Check if session exists at all to give better error message?
+            // Or strictly follow "Throw error if user is not part of the session"
+            // Let's assume if no row returned, either session doesn't exist or user not participant.
+            // Security-wise, generic error is fine, but for debugging slightly descriptive is better.
+            throw new Error('Session not found or user is not a participant');
+        }
+
+        const session = sessionResult.rows[0];
+
+        // 2. Get all participants
+        const participantsQuery = `
+            SELECT 
+                u.id AS "user_id",
+                u.name,
+                CASE 
+                    WHEN u.id = $2 THEN 'host'
+                    ELSE 'participant'
+                END AS "role"
+            FROM participants p
+            JOIN users u ON p.user_id = u.id
+            WHERE p.session_id = $1;
+        `;
+
+        const participantsResult = await client.query(participantsQuery, [sessionId, session.host_id]);
+
+        return {
+            ...session,
+            participants: participantsResult.rows
+        };
+
+    } catch (error) {
+        console.error('Error fetching session details:', error);
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error('Failed to fetch session details');
+    } finally {
+        client.release();
+    }
+};
+
 

@@ -75,4 +75,51 @@ router.post('/leave', async (req: AuthRequest, res) => {
     }
 });
 
+// GET /session/my
+router.get('/my', async (req: AuthRequest, res) => {
+    try {
+        const userId = req.user.id;
+        const sessions = await sessionService.getMySessions(userId);
+        res.status(200).json(sessions);
+    } catch (error: any) {
+        console.error('Error in /session/my:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /session/active
+router.get('/active', async (req: AuthRequest, res) => {
+    try {
+        const userId = req.user.id;
+        const sessions = await sessionService.getActiveSessions(userId);
+        res.status(200).json(sessions);
+    } catch (error: any) {
+        console.error('Error in /session/active:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /session/:id
+router.get('/:id', async (req: AuthRequest, res) => {
+    try {
+        const sessionId = parseInt(req.params.id);
+        const userId = req.user.id;
+
+        if (isNaN(sessionId)) {
+            res.status(400).json({ error: `Invalid session ID: ${req.params.id}` });
+            return;
+        }
+
+        const session = await sessionService.getSessionDetails(sessionId, userId);
+        res.status(200).json(session);
+    } catch (error: any) {
+        console.error(`Error in /session/${req.params.id}:`, error);
+        if (error.message === 'Session not found or user is not a participant') {
+            res.status(404).json({ error: error.message });
+        } else {
+            res.status(500).json({ error: error.message });
+        }
+    }
+});
+
 export default router;
