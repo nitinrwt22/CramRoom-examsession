@@ -1,6 +1,8 @@
 import express from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth.middleware';
 import * as sessionService from '../services/session.service';
+import * as sessionFileService from '../services/sessionFile.service';
+import { upload } from '../config/multer';
 
 const router = express.Router();
 
@@ -121,5 +123,7 @@ router.get('/:id', async (req: AuthRequest, res) => {
         }
     }
 });
+
+
 
 export default router;
