@@ -82,4 +82,33 @@ router.delete('/files/:fileId', async (req: AuthRequest, res) => {
     }
 });
 
+// GET /session/files/:fileId/download
+router.get('/files/:fileId/download', async (req: AuthRequest, res) => {
+    try {
+        const fileId = parseInt(req.params.fileId);
+        const userId = req.user.id;
+
+        if (isNaN(fileId)) {
+            res.status(400).json({ error: `Invalid file ID: ${req.params.fileId}` });
+            return;
+        }
+
+        const { absolutePath, mimeType, originalName } = await sessionFileService.downloadSessionFile(fileId, userId);
+
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}"`);
+        res.setHeader('Content-Type', mimeType);
+
+        res.sendFile(absolutePath);
+    } catch (error: any) {
+        console.error(`Error in GET /session/files/${req.params.fileId}/download:`, error);
+        if (error.message === 'File not found' || error.message === 'Session not found' || error.message === 'File not found on disk') {
+            res.status(404).json({ error: error.message });
+        } else if (error.message === 'User is not a participant in this session') {
+            res.status(403).json({ error: error.message });
+        } else {
+            res.status(500).json({ error: error.message });
+        }
+    }
+});
+
 export default router;

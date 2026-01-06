@@ -177,3 +177,45 @@ export const deleteSessionFile = async (fileId: number, userId: number) => {
         client.release();
     }
 };
+
+export const downloadSessionFile = async (fileId: number, userId: number) => {
+    // 1. Fetch file metadata
+    const fileResult = await pool.query('SELECT * FROM session_files WHERE id = $1', [fileId]);
+
+    if (fileResult.rows.length === 0) {
+        throw new Error('File not found');
+    }
+
+    const file = fileResult.rows[0];
+
+    // 2. Fetch related session
+    const sessionResult = await pool.query('SELECT * FROM sessions WHERE id = $1', [file.session_id]);
+
+    if (sessionResult.rows.length === 0) {
+        throw new Error('Session not found');
+    }
+
+    // 3. Verify user is a participant
+    const participantResult = await pool.query(
+        'SELECT 1 FROM participants WHERE session_id = $1 AND user_id = $2',
+        [file.session_id, userId]
+    );
+
+    if (participantResult.rows.length === 0) {
+        throw new Error('User is not a participant in this session');
+    }
+
+    // 4. Verify file exists on disk
+    const absolutePath = path.join(process.cwd(), 'uploads/session-files', file.stored_name);
+
+    if (!fs.existsSync(absolutePath)) {
+        throw new Error('File not found on disk');
+    }
+
+    // 5. Return
+    return {
+        absolutePath,
+        mimeType: file.mime_type,
+        originalName: file.original_name,
+    };
+};
