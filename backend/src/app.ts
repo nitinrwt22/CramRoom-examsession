@@ -3,6 +3,7 @@ import cors from "cors";
 import authRoutes from "./routes/auth.routes";
 import sessionRoutes from "./routes/session.routes";
 import sessionFilesRoutes from "./routes/sessionFiles.routes";
+import dashboardRoutes from "./routes/dashboard.routes";
 
 import { authenticateToken } from "./middleware/auth.middleware";
 
@@ -27,6 +28,7 @@ app.get("/session/my", authenticateToken, (req: any, res) => {
 
 app.use("/session", authenticateToken, sessionRoutes);
 app.use("/session", authenticateToken, sessionFilesRoutes);
+app.use("/dashboard", authenticateToken, dashboardRoutes);
 // Example: app.use("/api/users", userRoutes);
 
 export default app;
