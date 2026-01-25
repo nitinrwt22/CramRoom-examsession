@@ -1,5 +1,9 @@
 'use client'
 
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { isLoggedIn } from '@/lib/auth'
+import api from '@/lib/axios'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Plus, Clock, CheckCircle2, ArrowRight } from 'lucide-react'
@@ -13,60 +17,45 @@ interface Session {
 }
 
 export default function SessionsPage() {
-    const activeSessions: Session[] = [
-        {
-            id: '1',
-            subject: 'Calculus II Midterm',
-            status: 'active',
-            examDate: '2024-02-15',
-            participants: 5,
-        },
-        {
-            id: '2',
-            subject: 'Biology Final Prep',
-            status: 'active',
-            examDate: '2024-02-20',
-            participants: 8,
-        },
-        {
-            id: '3',
-            subject: 'European History',
-            status: 'active',
-            examDate: '2024-02-18',
-            participants: 3,
-        },
-        {
-            id: '4',
-            subject: 'Chemistry Problem Sets',
-            status: 'active',
-            examDate: '2024-02-16',
-            participants: 6,
-        },
-    ]
+    const router = useRouter()
+    const [sessions, setSessions] = useState<Session[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
-    const expiredSessions: Session[] = [
-        {
-            id: '5',
-            subject: 'Organic Chemistry Exam',
-            status: 'expired',
-            examDate: '2024-01-20',
-            participants: 7,
-        },
-        {
-            id: '6',
-            subject: 'Linear Algebra',
-            status: 'expired',
-            examDate: '2024-01-15',
-            participants: 4,
-        },
-        {
-            id: '7',
-            subject: 'Physics Mechanics',
-            status: 'expired',
-            examDate: '2024-01-10',
-            participants: 5,
-        },
-    ]
+    useEffect(() => {
+        if (!isLoggedIn()) {
+            router.push('/login')
+            return
+        }
+
+        const fetchSessions = async () => {
+            try {
+                setLoading(true)
+                const response = await api.get('/session/my')
+                // Map backend response components to frontend Session interface if needed
+                // Backend returns: id, subject, status, exam_date, participants, role
+                const mappedSessions = response.data.map((s: any) => ({
+                    id: s.id.toString(),
+                    subject: s.subject,
+                    status: s.status,
+                    examDate: s.exam_date,
+                    participants: s.participants || 0
+                }))
+                setSessions(mappedSessions)
+                setError(null)
+            } catch (err) {
+                console.error("Failed to fetch sessions:", err)
+                setError("Failed to load sessions")
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        fetchSessions()
+    }, [router])
+
+    const activeSessions = sessions.filter(s => s.status === 'active')
+    const expiredSessions = sessions.filter(s => s.status === 'expired')
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString)
@@ -116,6 +105,33 @@ export default function SessionsPage() {
         </Card>
     )
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="flex flex-col items-center gap-4">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                    <p className="text-muted-foreground">Loading sessions...</p>
+                </div>
+            </div>
+        )
+    }
+
+    if (error) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <div className="text-center p-6 max-w-sm mx-auto">
+                    <p className="text-red-500 mb-4">{error}</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
@@ -142,11 +158,17 @@ export default function SessionsPage() {
                         <h2 className="text-xl font-bold text-foreground">Active Sessions</h2>
                         <p className="text-sm text-muted-foreground">Ongoing study sessions</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {activeSessions.map((session) => (
-                            <SessionCard key={session.id} session={session} />
-                        ))}
-                    </div>
+                    {activeSessions.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {activeSessions.map((session) => (
+                                <SessionCard key={session.id} session={session} />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">
+                            <p>No active sessions found.</p>
+                        </div>
+                    )}
                 </section>
 
                 {/* Expired Sessions Section */}
@@ -155,11 +177,17 @@ export default function SessionsPage() {
                         <h2 className="text-xl font-bold text-foreground">Expired Sessions</h2>
                         <p className="text-sm text-muted-foreground">Completed study sessions</p>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {expiredSessions.map((session) => (
-                            <SessionCard key={session.id} session={session} />
-                        ))}
-                    </div>
+                    {expiredSessions.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {expiredSessions.map((session) => (
+                                <SessionCard key={session.id} session={session} />
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="p-4 text-sm text-muted-foreground">
+                            <p>No expired sessions yet.</p>
+                        </div>
+                    )}
                 </section>
             </main>
         </div>
