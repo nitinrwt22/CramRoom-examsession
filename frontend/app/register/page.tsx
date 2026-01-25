@@ -4,17 +4,20 @@ import React from "react"
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import api from '@/lib/axios'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 
 export default function RegisterPage() {
+    const router = useRouter()
     const [name, setName] = useState('')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [error, setError] = useState('')
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
         setError('')
 
@@ -31,6 +34,13 @@ export default function RegisterPage() {
         if (password.length < 6) {
             setError('Password must be at least 6 characters')
             return
+        }
+
+        try {
+            await api.post('/auth/register', { name, email, password })
+            router.push('/login')
+        } catch (err: any) {
+            setError(err.response?.data?.message || 'Registration failed. Please try again.')
         }
     }
 
