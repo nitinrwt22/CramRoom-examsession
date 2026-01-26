@@ -89,6 +89,27 @@ export default function SessionDetailPage() {
         setFiles([newFile, ...files])
     }
 
+    const handleDownloadFile = async (fileId: string, fileName: string) => {
+        try {
+            const response = await api.get(`/session/files/${fileId}/download`, {
+                responseType: 'blob',
+            })
+
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', fileName)
+            document.body.appendChild(link)
+            link.click()
+
+            link.parentNode?.removeChild(link)
+            window.URL.revokeObjectURL(url)
+        } catch (error) {
+            console.error('Error downloading file:', error)
+            alert('Failed to download file. Please try again.')
+        }
+    }
+
     const handleDeleteFile = (fileId: string) => {
         setFiles(files.filter((f) => f.id !== fileId))
     }
@@ -196,6 +217,7 @@ export default function SessionDetailPage() {
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center justify-end gap-2">
                                                             <button
+                                                                onClick={() => handleDownloadFile(file.id, file.name)}
                                                                 className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
                                                                 aria-label="Download"
                                                             >
@@ -232,7 +254,10 @@ export default function SessionDetailPage() {
                                                     {formatDate(file.uploadDate)} • {file.size}
                                                 </span>
                                                 <div className="flex items-center gap-2">
-                                                    <button className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
+                                                    <button
+                                                        onClick={() => handleDownloadFile(file.id, file.name)}
+                                                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                                                    >
                                                         <Download className="w-4 h-4" />
                                                     </button>
                                                     <button
