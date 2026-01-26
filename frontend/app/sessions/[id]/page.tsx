@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
-import { Download, Trash2, Plus, FileText } from 'lucide-react'
+import { Download, Trash2, Plus, FileText, Loader2 } from 'lucide-react'
+import api from '@/lib/axios'
 
 interface SessionFile {
     id: string
@@ -14,45 +16,73 @@ interface SessionFile {
     uploadedBy: string
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export default function SessionDetailPage({ params: _params }: { params: { id: string } }) {
+interface BackendFile {
+    id: string
+    original_name: string
+    uploaded_at: string
+    uploader_id: string
+}
+
+interface Session {
+    id: string
+    subject: string
+    status: 'active' | 'expired'
+    exam_date: string
+    expiry_time: string
+    role: 'host' | 'participant'
+}
+
+export default function SessionDetailPage() {
+    const params = useParams<{ id: string }>()
+    const router = useRouter()
+    const [session, setSession] = useState<Session | null>(null)
+    const [files, setFiles] = useState<SessionFile[]>([])
+    const [loading, setLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
-    const [files, setFiles] = useState<SessionFile[]>([
-        {
-            id: '1',
-            name: 'Calculus_Chapter5_Notes.pdf',
-            uploadDate: '2024-02-14',
-            size: '2.4 MB',
-            uploadedBy: 'Alice Johnson',
-        },
-        {
-            id: '2',
-            name: 'Practice_Problems_Solution.docx',
-            uploadDate: '2024-02-13',
-            size: '1.1 MB',
-            uploadedBy: 'Bob Smith',
-        },
-        {
-            id: '3',
-            name: 'Study_Guide_Midterm.xlsx',
-            uploadDate: '2024-02-12',
-            size: '0.8 MB',
-            uploadedBy: 'Carol Davis',
-        },
-        {
-            id: '4',
-            name: 'Formula_Sheet_Reference.pdf',
-            uploadDate: '2024-02-11',
-            size: '0.5 MB',
-            uploadedBy: 'David Wilson',
-        },
-    ])
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                // Fetch session details
+                const sessionResponse = await api.get(`/session/${params.id}`)
+                setSession(sessionResponse.data)
+
+                // Fetch session files
+                try {
+                    const filesResponse = await api.get(`/session/${params.id}/files`)
+                    const mappedFiles: SessionFile[] = filesResponse.data.map((file: BackendFile) => ({
+                        id: file.id,
+                        name: file.original_name,
+                        uploadDate: file.uploaded_at,
+                        size: '-', // Not provided by backend
+                        uploadedBy: 'User ' + file.uploader_id, // Map or placeholder
+                    }))
+                    setFiles(mappedFiles)
+                } catch (fileErr) {
+                    console.error('Error fetching files:', fileErr)
+                    // Don't block page load if files fail? 
+                    // Or maybe just show empty?
+                }
+            } catch (err) {
+                console.error('Error fetching session:', err)
+                setError('Failed to load session details')
+                router.push('/sessions')
+            } finally {
+                setLoading(false)
+            }
+        }
+
+        if (params.id) {
+            fetchData()
+        }
+    }, [params.id, router])
 
     const handleUploadFile = (file: File) => {
         const newFile: SessionFile = {
-            id: String(files.length + 1),
+            id: String(files.length + 1), // temp ID
             name: file.name,
-            uploadDate: new Date().toISOString().split('T')[0],
+            uploadDate: new Date().toISOString(),
             size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
             uploadedBy: 'You',
         }
@@ -68,6 +98,19 @@ export default function SessionDetailPage({ params: _params }: { params: { id: s
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     }
 
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+        )
+    }
+
+    if (error || !session) {
+        // Should have redirected, but just in case
+        return null
+    }
+
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
@@ -75,8 +118,10 @@ export default function SessionDetailPage({ params: _params }: { params: { id: s
                 <div className="max-w-7xl mx-auto px-4 py-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold text-foreground">Calculus II Midterm</h1>
-                            <p className="text-sm text-muted-foreground mt-1">Study session • Exam: Feb 15, 2024</p>
+                            <h1 className="text-3xl font-bold text-foreground">{session.subject}</h1>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                Study session • Exam: {session.exam_date ? formatDate(session.exam_date) : 'TBD'}
+                            </p>
                         </div>
                     </div>
                 </div>
