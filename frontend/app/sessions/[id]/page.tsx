@@ -19,8 +19,9 @@ interface SessionFile {
 interface BackendFile {
     id: string
     original_name: string
-    uploaded_at: string
-    uploader_id: string
+    created_at: string
+    uploaded_by: string
+    size: string
 }
 
 interface Session {
@@ -41,6 +42,22 @@ export default function SessionDetailPage() {
     const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
+    const fetchFiles = async () => {
+        try {
+            const filesResponse = await api.get(`/session/${params.id}/files`)
+            const mappedFiles: SessionFile[] = filesResponse.data.map((file: BackendFile) => ({
+                id: file.id,
+                name: file.original_name,
+                uploadDate: file.created_at,
+                size: (parseInt(file.size) / 1024 / 1024).toFixed(1) + ' MB',
+                uploadedBy: 'User ' + file.uploaded_by,
+            }))
+            setFiles(mappedFiles)
+        } catch (fileErr) {
+            console.error('Error fetching files:', fileErr)
+        }
+    }
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -49,21 +66,7 @@ export default function SessionDetailPage() {
                 setSession(sessionResponse.data)
 
                 // Fetch session files
-                try {
-                    const filesResponse = await api.get(`/session/${params.id}/files`)
-                    const mappedFiles: SessionFile[] = filesResponse.data.map((file: BackendFile) => ({
-                        id: file.id,
-                        name: file.original_name,
-                        uploadDate: file.uploaded_at,
-                        size: '-', // Not provided by backend
-                        uploadedBy: 'User ' + file.uploader_id, // Map or placeholder
-                    }))
-                    setFiles(mappedFiles)
-                } catch (fileErr) {
-                    console.error('Error fetching files:', fileErr)
-                    // Don't block page load if files fail? 
-                    // Or maybe just show empty?
-                }
+                await fetchFiles()
             } catch (err) {
                 console.error('Error fetching session:', err)
                 setError('Failed to load session details')
@@ -78,15 +81,25 @@ export default function SessionDetailPage() {
         }
     }, [params.id, router])
 
-    const handleUploadFile = (file: File) => {
-        const newFile: SessionFile = {
-            id: String(files.length + 1), // temp ID
-            name: file.name,
-            uploadDate: new Date().toISOString(),
-            size: `${(file.size / 1024 / 1024).toFixed(1)} MB`,
-            uploadedBy: 'You',
+    const handleUploadFile = async (file: File) => {
+        if (!session || session.status === 'expired') return
+
+        const formData = new FormData()
+        formData.append('file', file)
+
+        try {
+            await api.post(`/session/${params.id}/files`, formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
+            })
+            // Refresh file list
+            await fetchFiles()
+            setIsUploadModalOpen(false)
+        } catch (error) {
+            console.error('Error uploading file:', error)
+            alert('Failed to upload file. Please try again.')
         }
-        setFiles([newFile, ...files])
     }
 
     const handleDownloadFile = async (fileId: string, fileName: string) => {
