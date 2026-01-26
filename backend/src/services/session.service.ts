@@ -161,7 +161,7 @@ export const leaveSession = async (sessionId: number, userId: number) => {
 export const getMySessions = async (userId: number) => {
     const query = `
         SELECT 
-            s.id AS "session_id",
+            s.id,
             s.subject,
             s.status,
             s.exam_date,
@@ -169,7 +169,8 @@ export const getMySessions = async (userId: number) => {
             CASE 
                 WHEN s.host_id = $1 THEN 'host'
                 ELSE 'participant'
-            END AS "role"
+            END AS "role",
+            (SELECT COUNT(*) FROM participants p2 WHERE p2.session_id = s.id)::int as participants
         FROM sessions s
         JOIN participants p ON s.id = p.session_id
         WHERE p.user_id = $1

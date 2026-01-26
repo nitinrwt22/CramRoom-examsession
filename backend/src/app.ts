@@ -22,9 +22,6 @@ app.use("/auth", authRoutes); // Public auth routes (register, login)
 
 // 3. Protected Routes
 // Apply authentication middleware only to routes that require it
-app.get("/session/my", authenticateToken, (req: any, res) => {
-    res.json({ user: req.user });
-});
 
 app.use("/session", authenticateToken, sessionRoutes);
 app.use("/session", authenticateToken, sessionFilesRoutes);
