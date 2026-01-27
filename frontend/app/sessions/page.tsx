@@ -63,46 +63,51 @@ export default function SessionsPage() {
     }
 
     const SessionCard = ({ session }: { session: Session }) => (
-        <Card className="border border-border hover:shadow-md transition-shadow group">
-            <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <h3 className="font-semibold text-foreground text-pretty">{session.subject}</h3>
-                            <span
-                                className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${session.status === 'active'
-                                    ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
-                                    : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
-                                    }`}
-                            >
-                                {session.status === 'active' ? (
-                                    <>
-                                        <Clock className="w-3 h-3 mr-1" />
-                                        Active
-                                    </>
-                                ) : (
-                                    <>
-                                        <CheckCircle2 className="w-3 h-3 mr-1" />
-                                        Expired
-                                    </>
-                                )}
-                            </span>
+        <div
+            onClick={() => router.push(`/sessions/${session.id}`)}
+            className="cursor-pointer"
+        >
+            <Card className="border border-border hover:shadow-md transition-shadow group">
+                <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                                <h3 className="font-semibold text-foreground text-pretty">{session.subject}</h3>
+                                <span
+                                    className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${session.status === 'active'
+                                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400'
+                                        }`}
+                                >
+                                    {session.status === 'active' ? (
+                                        <>
+                                            <Clock className="w-3 h-3 mr-1" />
+                                            Active
+                                        </>
+                                    ) : (
+                                        <>
+                                            <CheckCircle2 className="w-3 h-3 mr-1" />
+                                            Expired
+                                        </>
+                                    )}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                                <span>📅 {formatDate(session.examDate)}</span>
+                                <span>👥 {session.participants} studying</span>
+                            </div>
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span>📅 {formatDate(session.examDate)}</span>
-                            <span>👥 {session.participants} studying</span>
-                        </div>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            <ArrowRight className="w-4 h-4" />
+                        </Button>
                     </div>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                        <ArrowRight className="w-4 h-4" />
-                    </Button>
-                </div>
-            </CardContent>
-        </Card>
+                </CardContent>
+            </Card>
+        </div>
     )
 
     if (loading) {

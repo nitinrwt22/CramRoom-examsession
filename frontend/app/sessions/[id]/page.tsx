@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
-import { Download, Trash2, Plus, FileText, Loader2 } from 'lucide-react'
+import { Download, Trash2, Plus, FileText, Loader2, LogOut } from 'lucide-react'
 import api from '@/lib/axios'
 
 interface SessionFile {
@@ -41,6 +41,7 @@ export default function SessionDetailPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+    const [leaving, setLeaving] = useState(false)
 
     const fetchFiles = async () => {
         try {
@@ -61,6 +62,12 @@ export default function SessionDetailPage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
+                // Validate ID format before making request
+                if (!params.id || isNaN(parseInt(params.id))) {
+                    setError('Invalid session ID')
+                    return
+                }
+
                 // Fetch session details
                 const sessionResponse = await api.get(`/session/${params.id}`)
                 setSession(sessionResponse.data)
@@ -132,6 +139,20 @@ export default function SessionDetailPage() {
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     }
 
+    const handleLeaveSession = async () => {
+        if (!confirm("Are you sure you want to leave this session?")) return;
+
+        setLeaving(true);
+        try {
+            await api.post('/session/leave', { sessionId: parseInt(params.id) });
+            router.push('/sessions');
+        } catch (error) {
+            console.error('Error leaving session:', error);
+            alert('Failed to leave session. Please try again.');
+            setLeaving(false);
+        }
+    };
+
     if (loading) {
         return (
             <div className="min-h-screen bg-background flex items-center justify-center">
@@ -141,8 +162,20 @@ export default function SessionDetailPage() {
     }
 
     if (error || !session) {
-        // Should have redirected, but just in case
-        return null
+        return (
+            <div className="min-h-screen bg-background flex items-center justify-center">
+                <Card className="w-full max-w-md mx-4">
+                    <CardContent className="pt-6 text-center space-y-4">
+                        <div className="text-red-500 font-medium">
+                            {error || "Session not found"}
+                        </div>
+                        <Button onClick={() => router.push('/sessions')} variant="secondary">
+                            Back to Sessions
+                        </Button>
+                    </CardContent>
+                </Card>
+            </div>
+        )
     }
 
     return (
@@ -156,6 +189,18 @@ export default function SessionDetailPage() {
                             <p className="text-sm text-muted-foreground mt-1">
                                 Study session • Exam: {session.exam_date ? formatDate(session.exam_date) : 'TBD'}
                             </p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={handleLeaveSession}
+                                disabled={leaving}
+                                className="gap-2"
+                            >
+                                {leaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                                {leaving ? 'Leaving...' : 'Leave Session'}
+                            </Button>
                         </div>
                     </div>
                 </div>
