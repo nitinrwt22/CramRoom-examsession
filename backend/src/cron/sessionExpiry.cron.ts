@@ -29,5 +29,5 @@ export const initSessionExpiryCron = () => {
     // Schedule task to run every 5 minutes
     cron.schedule('*/5 * * * *', runSessionExpiryCheck);
 
-    console.log('Session expiry cron job initialized (runs every 5 minutes).');
+
 };
