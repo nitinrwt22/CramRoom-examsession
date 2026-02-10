@@ -1,5 +1,6 @@
 
 import { SessionContext } from '../sessionContext.service';
+import { DummyAIProvider } from './aiProvider';
 
 /**
  * 1. AIIntent
@@ -38,11 +39,22 @@ export interface AIEngineResponse {
  * @returns A placeholder AIEngineResponse.
  */
 const handleConceptClarification = async (input: AIEngineInput): Promise<AIEngineResponse> => {
-    // Placeholder logic for now. 
-    // Future: This will construct prompt -> call LLM -> parse response.
+    const provider = new DummyAIProvider();
+
+    // Prepare placeholder prompts
+    const systemPrompt = "Placeholder system prompt";
+    const contextPrompt = "Placeholder context prompt";
+    const userPrompt = "Placeholder user prompt";
+
+    // Call AI provider
+    const aiResponse = await provider.generateResponse({
+        systemPrompt,
+        contextPrompt,
+        userPrompt
+    });
 
     return {
-        answer: "AI concept clarification not implemented yet.",
+        answer: aiResponse.text,
         confidence: "low",
         sourcesUsed: []
     };
