@@ -2,7 +2,9 @@ import express from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth.middleware';
 import * as sessionService from '../services/session.service';
 import * as sessionFileService from '../services/sessionFile.service';
+import { handleAIQuery } from '../controllers/aiSession.controller';
 import { upload } from '../config/multer';
+
 
 const router = express.Router();
 
@@ -125,5 +127,10 @@ router.get('/:id', async (req: AuthRequest, res) => {
 });
 
 
+
+
+
+// POST /session/:sessionId/ai/query
+router.post('/:sessionId/ai/query', handleAIQuery);
 
 export default router;

@@ -24,6 +24,8 @@ app.use("/auth", authRoutes); // Public auth routes (register, login)
 // Apply authentication middleware only to routes that require it
 
 app.use("/session", authenticateToken, sessionRoutes);
+// Alias for API consistency
+app.use("/api/sessions", authenticateToken, sessionRoutes);
 app.use("/session", authenticateToken, sessionFilesRoutes);
 app.use("/dashboard", authenticateToken, dashboardRoutes);
 // Example: app.use("/api/users", userRoutes);
