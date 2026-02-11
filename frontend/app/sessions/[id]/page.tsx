@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
-import { Download, Trash2, Plus, FileText, Loader2, LogOut } from 'lucide-react'
+import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, Bot } from 'lucide-react'
 import api from '@/lib/axios'
 
 interface SessionFile {
@@ -33,6 +33,11 @@ interface Session {
     role: 'host' | 'participant'
 }
 
+interface AIQueryResponse {
+    answer: string
+    confidence: number
+}
+
 export default function SessionDetailPage() {
     const params = useParams<{ id: string }>()
     const router = useRouter()
@@ -42,6 +47,10 @@ export default function SessionDetailPage() {
     const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
     const [leaving, setLeaving] = useState(false)
+    const [question, setQuestion] = useState('')
+    const [aiResponse, setAiResponse] = useState<AIQueryResponse | null>(null)
+    const [aiLoading, setAiLoading] = useState(false)
+    const [aiError, setAiError] = useState<string | null>(null)
 
     const fetchFiles = async () => {
         try {
@@ -152,6 +161,31 @@ export default function SessionDetailPage() {
             setLeaving(false);
         }
     };
+
+    const handleAskAI = async () => {
+        if (!question.trim()) return
+
+        setAiLoading(true)
+        setAiError(null)
+        setAiResponse(null)
+
+        try {
+            const response = await api.post(`/api/sessions/${params.id}/ai/query`, {
+                intent: 'concept_clarification',
+                question: question
+            })
+
+            setAiResponse({
+                answer: response.data.answer,
+                confidence: response.data.confidence || 0
+            })
+        } catch (err: any) {
+            console.error('Error asking AI:', err)
+            setAiError(err.response?.data?.message || 'Failed to get AI response')
+        } finally {
+            setAiLoading(false)
+        }
+    }
 
     if (loading) {
         return (
@@ -329,6 +363,77 @@ export default function SessionDetailPage() {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* AI Assistant Section */}
+                <Card className="mt-8 border border-border">
+                    <CardHeader>
+                        <div className="flex items-center gap-2">
+                            <Sparkles className="w-5 h-5 text-primary" />
+                            <CardTitle className="text-lg">AI Session Assistant</CardTitle>
+                        </div>
+                        <CardDescription>
+                            Ask questions about the session content or get clarification on concepts.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <textarea
+                                className="w-full min-h-[100px] p-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                placeholder="What would you like to know about this session?"
+                                value={question}
+                                onChange={(e) => setQuestion(e.target.value)}
+                                disabled={aiLoading}
+                            />
+                        </div>
+
+                        <div className="flex justify-end">
+                            <Button
+                                onClick={handleAskAI}
+                                disabled={!question.trim() || aiLoading}
+                                className="gap-2"
+                            >
+                                {aiLoading ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        Thinking...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send className="w-4 h-4" />
+                                        Ask AI
+                                    </>
+                                )}
+                            </Button>
+                        </div>
+
+                        {aiError && (
+                            <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm">
+                                {aiError}
+                            </div>
+                        )}
+
+                        {aiResponse && (
+                            <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border space-y-3">
+                                <div className="flex items-start gap-3">
+                                    <Bot className="w-5 h-5 text-primary mt-1" />
+                                    <div className="space-y-1">
+                                        <h4 className="font-medium text-sm">AI Response</h4>
+                                        <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                                            {aiResponse.answer}
+                                        </div>
+                                    </div>
+                                </div>
+                                {aiResponse.confidence !== undefined && (
+                                    <div className="flex items-center gap-2 ml-8">
+                                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                                            {Math.round(aiResponse.confidence * 100)}% Confidence
+                                        </span>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </CardContent>
