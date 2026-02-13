@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { buildSessionContext } from '../services/sessionContext.service';
 import { runAIEngine } from '../services/ai/aiEngine.service';
+import { saveSessionAIMessage } from '../models/sessionAiMessage.model';
 
 /**
  * Handles the AI query request for a specific session.
@@ -50,6 +51,15 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
             context: sessionContext,
             intent,
             question
+        });
+
+        // Save AI interaction to maintain session history
+        await saveSessionAIMessage({
+            session_id: parseInt(sessionId, 10),
+            user_id: parseInt(userId!.toString(), 10),
+            intent,
+            question,
+            answer: aiResponse.answer
         });
 
         // 4. Return Response
