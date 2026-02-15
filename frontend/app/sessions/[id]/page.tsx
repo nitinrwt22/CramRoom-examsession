@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
-import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, Bot } from 'lucide-react'
+import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, Bot, User } from 'lucide-react'
 import api from '@/lib/axios'
 
 interface SessionFile {
@@ -33,6 +33,14 @@ interface Session {
     role: 'host' | 'participant'
 }
 
+interface AIMessage {
+    id?: number
+    question: string
+    answer: string
+    createdAt: string
+    confidence?: number
+}
+
 interface AIQueryResponse {
     answer: string
     confidence: number
@@ -47,10 +55,24 @@ export default function SessionDetailPage() {
     const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
     const [leaving, setLeaving] = useState(false)
+
+    // AI State
     const [question, setQuestion] = useState('')
-    const [aiResponse, setAiResponse] = useState<AIQueryResponse | null>(null)
+    const [aiHistory, setAiHistory] = useState<AIMessage[]>([])
+    const [historyLoading, setHistoryLoading] = useState(true)
     const [aiLoading, setAiLoading] = useState(false)
     const [aiError, setAiError] = useState<string | null>(null)
+
+    // Ref for auto-scrolling
+    const historyEndRef = useRef<HTMLDivElement>(null)
+
+    const scrollToBottom = () => {
+        historyEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+
+    useEffect(() => {
+        scrollToBottom()
+    }, [aiHistory])
 
     const fetchFiles = async () => {
         try {
@@ -65,6 +87,18 @@ export default function SessionDetailPage() {
             setFiles(mappedFiles)
         } catch (fileErr) {
             console.error('Error fetching files:', fileErr)
+        }
+    }
+
+    const fetchAIHistory = async () => {
+        try {
+            const response = await api.get(`/api/sessions/${params.id}/ai/history`)
+            setAiHistory(response.data)
+        } catch (err) {
+            console.error('Error fetching AI history:', err)
+            // Don't show critical error for this, just log it
+        } finally {
+            setHistoryLoading(false)
         }
     }
 
@@ -83,6 +117,9 @@ export default function SessionDetailPage() {
 
                 // Fetch session files
                 await fetchFiles()
+
+                // Fetch AI history
+                await fetchAIHistory()
             } catch (err) {
                 console.error('Error fetching session:', err)
                 setError('Failed to load session details')
@@ -148,6 +185,11 @@ export default function SessionDetailPage() {
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     }
 
+    const formatTime = (dateString: string) => {
+        const date = new Date(dateString)
+        return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    }
+
     const handleLeaveSession = async () => {
         if (!confirm("Are you sure you want to leave this session?")) return;
 
@@ -167,7 +209,6 @@ export default function SessionDetailPage() {
 
         setAiLoading(true)
         setAiError(null)
-        setAiResponse(null)
 
         try {
             const response = await api.post(`/api/sessions/${params.id}/ai/query`, {
@@ -175,10 +216,15 @@ export default function SessionDetailPage() {
                 question: question
             })
 
-            setAiResponse({
+            const newMessage: AIMessage = {
+                question: question,
                 answer: response.data.answer,
-                confidence: response.data.confidence || 0
-            })
+                confidence: response.data.confidence,
+                createdAt: new Date().toISOString()
+            }
+
+            setAiHistory(prev => [...prev, newMessage])
+            setQuestion('')
         } catch (err: any) {
             console.error('Error asking AI:', err)
             setAiError(err.response?.data?.message || 'Failed to get AI response')
@@ -215,11 +261,11 @@ export default function SessionDetailPage() {
     return (
         <div className="min-h-screen bg-background">
             {/* Header */}
-            <header className="border-b border-border bg-card sticky top-0 z-10">
-                <div className="max-w-7xl mx-auto px-4 py-6">
+            <header className="border-b border-border bg-card sticky top-0 z-10 transition-shadow shadow-sm">
+                <div className="max-w-7xl mx-auto px-4 py-4 md:py-6">
                     <div className="flex items-center justify-between">
                         <div>
-                            <h1 className="text-3xl font-bold text-foreground">{session.subject}</h1>
+                            <h1 className="text-2xl md:text-3xl font-bold text-foreground truncate max-w-[200px] md:max-w-md">{session.subject}</h1>
                             <p className="text-sm text-muted-foreground mt-1">
                                 Study session • Exam: {session.exam_date ? formatDate(session.exam_date) : 'TBD'}
                             </p>
@@ -233,7 +279,7 @@ export default function SessionDetailPage() {
                                 className="gap-2"
                             >
                                 {leaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
-                                {leaving ? 'Leaving...' : 'Leave Session'}
+                                <span className="hidden sm:inline">{leaving ? 'Leaving...' : 'Leave Session'}</span>
                             </Button>
                         </div>
                     </div>
@@ -241,16 +287,16 @@ export default function SessionDetailPage() {
             </header>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 py-8">
+            <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
                 {/* Shared Files Section */}
-                <Card className="border border-border">
+                <Card className="border border-border shadow-sm">
                     <CardHeader className="pb-4">
                         <div className="flex items-center justify-between">
                             <div>
                                 <CardTitle className="text-lg">Shared Files</CardTitle>
                                 <CardDescription>All study materials for this session</CardDescription>
                             </div>
-                            <Button onClick={() => setIsUploadModalOpen(true)} className="gap-2">
+                            <Button onClick={() => setIsUploadModalOpen(true)} className="gap-2" size="sm">
                                 <Plus className="w-4 h-4" />
                                 Upload File
                             </Button>
@@ -258,7 +304,7 @@ export default function SessionDetailPage() {
                     </CardHeader>
                     <CardContent>
                         {files.length === 0 ? (
-                            <div className="text-center py-12">
+                            <div className="text-center py-12 bg-secondary/10 rounded-lg border border-dashed border-border">
                                 <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
                                 <p className="text-sm text-muted-foreground">No files uploaded yet</p>
                             </div>
@@ -269,30 +315,32 @@ export default function SessionDetailPage() {
                                     <table className="w-full">
                                         <thead className="bg-secondary/50 border-b border-border">
                                             <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                                     File Name
                                                 </th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                                     Uploaded By
                                                 </th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                                     Date
                                                 </th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground">
+                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                                     Size
                                                 </th>
-                                                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground">
+                                                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                                                     Actions
                                                 </th>
                                             </tr>
                                         </thead>
-                                        <tbody className="divide-y divide-border">
+                                        <tbody className="divide-y divide-border bg-card">
                                             {files.map((file) => (
                                                 <tr key={file.id} className="hover:bg-secondary/30 transition-colors">
                                                     <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <FileText className="w-4 h-4 text-muted-foreground flex-shrink-0" />
-                                                            <span className="text-sm font-medium text-foreground truncate">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 bg-primary/10 rounded text-primary">
+                                                                <FileText className="w-4 h-4" />
+                                                            </div>
+                                                            <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
                                                                 {file.name}
                                                             </span>
                                                         </div>
@@ -304,24 +352,26 @@ export default function SessionDetailPage() {
                                                         <span className="text-sm text-muted-foreground">{formatDate(file.uploadDate)}</span>
                                                     </td>
                                                     <td className="px-4 py-3">
-                                                        <span className="text-sm text-muted-foreground">{file.size}</span>
+                                                        <span className="text-sm text-muted-foreground font-mono">{file.size}</span>
                                                     </td>
                                                     <td className="px-4 py-3">
                                                         <div className="flex items-center justify-end gap-2">
-                                                            <button
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
                                                                 onClick={() => handleDownloadFile(file.id, file.name)}
-                                                                className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-                                                                aria-label="Download"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
                                                             >
                                                                 <Download className="w-4 h-4" />
-                                                            </button>
-                                                            <button
+                                                            </Button>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
                                                                 onClick={() => handleDeleteFile(file.id)}
-                                                                className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                                                                aria-label="Delete"
+                                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
                                                             >
                                                                 <Trash2 className="w-4 h-4" />
-                                                            </button>
+                                                            </Button>
                                                         </div>
                                                     </td>
                                                 </tr>
@@ -331,33 +381,39 @@ export default function SessionDetailPage() {
                                 </div>
 
                                 {/* Mobile Card View */}
-                                <div className="md:hidden divide-y divide-border">
+                                <div className="md:hidden divide-y divide-border bg-card">
                                     {files.map((file) => (
                                         <div key={file.id} className="p-4 space-y-3 hover:bg-secondary/30 transition-colors">
-                                            <div className="flex items-start gap-2">
-                                                <FileText className="w-4 h-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                                            <div className="flex items-start gap-3">
+                                                <div className="p-2 bg-primary/10 rounded text-primary mt-1">
+                                                    <FileText className="w-4 h-4" />
+                                                </div>
                                                 <div className="flex-1 min-w-0">
                                                     <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
                                                     <p className="text-xs text-muted-foreground mt-1">By {file.uploadedBy}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center justify-between">
+                                            <div className="flex items-center justify-between pt-2">
                                                 <span className="text-xs text-muted-foreground">
                                                     {formatDate(file.uploadDate)} • {file.size}
                                                 </span>
                                                 <div className="flex items-center gap-2">
-                                                    <button
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
                                                         onClick={() => handleDownloadFile(file.id, file.name)}
-                                                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+                                                        className="h-8 w-8"
                                                     >
                                                         <Download className="w-4 h-4" />
-                                                    </button>
-                                                    <button
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
                                                         onClick={() => handleDeleteFile(file.id)}
-                                                        className="p-1.5 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                                                        className="h-8 w-8 text-destructive"
                                                     >
                                                         <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    </Button>
                                                 </div>
                                             </div>
                                         </div>
@@ -369,73 +425,113 @@ export default function SessionDetailPage() {
                 </Card>
 
                 {/* AI Assistant Section */}
-                <Card className="mt-8 border border-border">
-                    <CardHeader>
+                <Card className="border border-border shadow-sm flex flex-col h-[600px]">
+                    <CardHeader className="border-b border-border bg-muted/20">
                         <div className="flex items-center gap-2">
                             <Sparkles className="w-5 h-5 text-primary" />
                             <CardTitle className="text-lg">AI Session Assistant</CardTitle>
                         </div>
                         <CardDescription>
-                            Ask questions about the session content or get clarification on concepts.
+                            Ask questions about shared materials or concepts.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <textarea
-                                className="w-full min-h-[100px] p-3 rounded-md border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                placeholder="What would you like to know about this session?"
-                                value={question}
-                                onChange={(e) => setQuestion(e.target.value)}
-                                disabled={aiLoading}
-                            />
-                        </div>
 
-                        <div className="flex justify-end">
-                            <Button
-                                onClick={handleAskAI}
-                                disabled={!question.trim() || aiLoading}
-                                className="gap-2"
-                            >
-                                {aiLoading ? (
-                                    <>
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                        Thinking...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Send className="w-4 h-4" />
-                                        Ask AI
-                                    </>
-                                )}
-                            </Button>
-                        </div>
+                    <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
+                        {/* Chat History Area */}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-secondary/5">
+                            {historyLoading ? (
+                                <div className="flex justify-center items-center h-full text-muted-foreground">
+                                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                                    Loading history...
+                                </div>
+                            ) : aiHistory.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground opacity-60">
+                                    <Bot className="w-12 h-12 mb-4" />
+                                    <p>No questions yet.</p>
+                                    <p className="text-sm">Start the conversation by asking about the session.</p>
+                                </div>
+                            ) : (
+                                aiHistory.map((msg, idx) => (
+                                    <div key={idx} className="space-y-4">
+                                        {/* User Question */}
+                                        <div className="flex justify-end">
+                                            <div className="max-w-[85%] md:max-w-[75%] space-y-1">
+                                                <div className="bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-tr-sm shadow-sm relative group">
+                                                    <p className="text-sm leading-relaxed">{msg.question}</p>
+                                                </div>
+                                                <div className="flex justify-end items-center gap-2 mr-1">
+                                                    <span className="text-[10px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center ml-2 flex-shrink-0">
+                                                <User className="w-4 h-4 text-primary" />
+                                            </div>
+                                        </div>
 
-                        {aiError && (
-                            <div className="p-4 rounded-lg bg-destructive/10 text-destructive text-sm">
-                                {aiError}
-                            </div>
-                        )}
-
-                        {aiResponse && (
-                            <div className="mt-6 p-4 rounded-lg bg-secondary/50 border border-border space-y-3">
-                                <div className="flex items-start gap-3">
-                                    <Bot className="w-5 h-5 text-primary mt-1" />
-                                    <div className="space-y-1">
-                                        <h4 className="font-medium text-sm">AI Response</h4>
-                                        <div className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                                            {aiResponse.answer}
+                                        {/* AI Answer */}
+                                        <div className="flex justify-start">
+                                            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center mr-2 flex-shrink-0 border border-border">
+                                                <Bot className="w-4 h-4 text-foreground" />
+                                            </div>
+                                            <div className="max-w-[85%] md:max-w-[75%] space-y-1">
+                                                <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
+                                                    <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+                                                        {msg.answer}
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2 ml-1">
+                                                    <span className="text-[10px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
+                                                    {msg.confidence !== undefined && (
+                                                        <span className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground border border-border">
+                                                            {Math.round(msg.confidence * 100)}% confidence
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                {aiResponse.confidence !== undefined && (
-                                    <div className="flex items-center gap-2 ml-8">
-                                        <span className="text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                                            {Math.round(aiResponse.confidence * 100)}% Confidence
-                                        </span>
-                                    </div>
-                                )}
+                                ))
+                            )}
+                            <div ref={historyEndRef} />
+                        </div>
+
+                        {/* Input Area */}
+                        <div className="p-4 bg-background border-t border-border">
+                            <div className="relative">
+                                <textarea
+                                    className="w-full min-h-[50px] max-h-[150px] p-3 pr-12 rounded-lg border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                                    placeholder="Ask a question..."
+                                    value={question}
+                                    onChange={(e) => setQuestion(e.target.value)}
+                                    // Submit on Enter (without shift)
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleAskAI();
+                                        }
+                                    }}
+                                    disabled={aiLoading}
+                                />
+                                <Button
+                                    size="icon"
+                                    className="absolute right-2 bottom-2 h-8 w-8"
+                                    onClick={handleAskAI}
+                                    disabled={!question.trim() || aiLoading}
+                                >
+                                    {aiLoading ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : (
+                                        <Send className="w-4 h-4" />
+                                    )}
+                                </Button>
                             </div>
-                        )}
+                            {aiError && (
+                                <p className="text-xs text-destructive mt-2 ml-1">{aiError}</p>
+                            )}
+                            <p className="text-[10px] text-muted-foreground mt-2 text-center">
+                                AI responses are generated based on uploaded session materials.
+                            </p>
+                        </div>
                     </CardContent>
                 </Card>
             </main>
