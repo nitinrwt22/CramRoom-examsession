@@ -37,7 +37,7 @@ export const saveSessionAIMessage = async (data: {
         const result = await pool.query(query, [session_id, user_id, intent, question, answer]);
         return result.rows[0];
     } catch (error) {
-        console.error('Error saving session AI message:', error);
+        console.error("AI SAVE ERROR:", error);
         throw error;
     }
 };

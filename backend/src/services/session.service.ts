@@ -249,10 +249,10 @@ export const getSessionDetails = async (sessionId: number, userId: number) => {
         const sessionResult = await client.query(sessionQuery, [sessionId, userId]);
 
         if (sessionResult.rowCount === 0) {
-            // Check if session exists at all to give better error message?
-            // Or strictly follow "Throw error if user is not part of the session"
-            // Let's assume if no row returned, either session doesn't exist or user not participant.
-            // Security-wise, generic error is fine, but for debugging slightly descriptive is better.
+            console.error(`Debug: Session not found or user not participant. SessionID: ${sessionId}, UserID: ${userId}`);
+
+
+
             throw new Error('Session not found or user is not a participant');
         }
 

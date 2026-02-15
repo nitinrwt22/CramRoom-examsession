@@ -3,7 +3,8 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { buildSessionContext } from '../services/sessionContext.service';
 import { runAIEngine } from '../services/ai/aiEngine.service';
-import { saveSessionAIMessage } from '../models/sessionAiMessage.model';
+import { getSessionDetails } from '../services/session.service';
+import { saveSessionAIMessage, getSessionAIHistory } from '../models/sessionAiMessage.model';
 
 /**
  * Handles the AI query request for a specific session.
@@ -75,6 +76,61 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
             res.status(404).json({ error: error.message });
         } else {
             res.status(500).json({ error: 'Internal Server Error during AI processing' });
+        }
+    }
+};
+
+/**
+ * Retrieves the AI interaction history for a specific session.
+ * 
+ * Steps:
+ * 1. Validate sessionId and userId.
+ * 2. Verify user is a participant of the session.
+ * 3. Fetch history from database.
+ * 4. Return formatted response.
+ */
+export const getSessionHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const sessionId = parseInt(req.params.sessionId, 10);
+        const userId = req.user?.id;
+
+        if (isNaN(sessionId)) {
+            res.status(400).json({ error: 'Invalid sessionId' });
+            return;
+        }
+
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+
+        // 1. Verify Session Participation
+        // Throws if session not found or user not participant
+        await getSessionDetails(sessionId, userId);
+
+        // 2. Fetch History
+        const history = await getSessionAIHistory(sessionId);
+
+        // 3. Format Response
+        const formattedHistory = history.map(msg => ({
+            id: msg.id,
+            sessionId: msg.session_id,
+            userId: msg.user_id,
+            intent: msg.intent,
+            question: msg.question,
+            answer: msg.answer,
+            createdAt: msg.created_at
+        }));
+
+        res.status(200).json(formattedHistory);
+
+    } catch (error: any) {
+        console.error('Error in getSessionHistory:', error);
+
+        if (error.message.includes('Session not found or user is not a participant')) {
+            res.status(403).json({ error: error.message });
+        } else {
+            res.status(500).json({ error: 'Internal Server Error fetching history' });
         }
     }
 };
