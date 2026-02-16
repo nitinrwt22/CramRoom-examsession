@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
-import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, Bot, User } from 'lucide-react'
+import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles } from 'lucide-react'
 import api from '@/lib/axios'
 
 interface SessionFile {
@@ -72,7 +72,7 @@ export default function SessionDetailPage() {
 
     useEffect(() => {
         scrollToBottom()
-    }, [aiHistory])
+    }, [aiHistory, aiLoading])
 
     const fetchFiles = async () => {
         try {
@@ -425,7 +425,7 @@ export default function SessionDetailPage() {
                 </Card>
 
                 {/* AI Assistant Section */}
-                <Card className="border border-border shadow-sm flex flex-col h-[600px]">
+                <Card className="border border-border shadow-sm flex flex-col">
                     <CardHeader className="border-b border-border bg-muted/20">
                         <div className="flex items-center gap-2">
                             <Sparkles className="w-5 h-5 text-primary" />
@@ -436,61 +436,59 @@ export default function SessionDetailPage() {
                         </CardDescription>
                     </CardHeader>
 
-                    <CardContent className="flex-1 flex flex-col p-0 overflow-hidden">
+                    <CardContent className="p-0">
                         {/* Chat History Area */}
-                        <div className="flex-1 overflow-y-auto p-4 space-y-6 bg-secondary/5">
+                        <div className="max-h-96 overflow-y-auto p-4 space-y-6 scroll-smooth bg-background">
                             {historyLoading ? (
-                                <div className="flex justify-center items-center h-full text-muted-foreground">
+                                <div className="flex justify-center items-center h-48 text-muted-foreground">
                                     <Loader2 className="w-6 h-6 animate-spin mr-2" />
                                     Loading history...
                                 </div>
                             ) : aiHistory.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground opacity-60">
-                                    <Bot className="w-12 h-12 mb-4" />
+                                <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground opacity-60">
+                                    <Sparkles className="w-12 h-12 mb-4" />
                                     <p>No questions yet.</p>
                                     <p className="text-sm">Start the conversation by asking about the session.</p>
                                 </div>
                             ) : (
                                 aiHistory.map((msg, idx) => (
-                                    <div key={idx} className="space-y-4">
+                                    <div key={idx} className="flex flex-col space-y-4">
                                         {/* User Question */}
-                                        <div className="flex justify-end">
-                                            <div className="max-w-[85%] md:max-w-[75%] space-y-1">
-                                                <div className="bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-tr-sm shadow-sm relative group">
-                                                    <p className="text-sm leading-relaxed">{msg.question}</p>
-                                                </div>
-                                                <div className="flex justify-end items-center gap-2 mr-1">
-                                                    <span className="text-[10px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
-                                                </div>
+                                        <div className="flex flex-col items-end pl-12">
+                                            <div className="flex items-center gap-2 mb-1 mr-1">
+                                                <span className="text-[10px] text-muted-foreground opacity-70">{formatTime(msg.createdAt)}</span>
+                                                <span className="text-xs text-muted-foreground font-medium">You</span>
                                             </div>
-                                            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center ml-2 flex-shrink-0">
-                                                <User className="w-4 h-4 text-primary" />
+                                            <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 rounded-2xl rounded-tr-none text-foreground shadow-sm">
+                                                <p className="text-sm leading-relaxed">{msg.question}</p>
                                             </div>
                                         </div>
 
                                         {/* AI Answer */}
-                                        <div className="flex justify-start">
-                                            <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center mr-2 flex-shrink-0 border border-border">
-                                                <Bot className="w-4 h-4 text-foreground" />
+                                        <div className="flex flex-col items-start pr-12">
+                                            <div className="flex items-center gap-2 mb-1 ml-1">
+                                                <span className="text-xs text-muted-foreground font-medium">CramRoom AI</span>
+                                                <span className="text-[10px] text-muted-foreground opacity-70">{formatTime(msg.createdAt)}</span>
                                             </div>
-                                            <div className="max-w-[85%] md:max-w-[75%] space-y-1">
-                                                <div className="bg-card border border-border px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">
-                                                    <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
-                                                        {msg.answer}
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2 ml-1">
-                                                    <span className="text-[10px] text-muted-foreground">{formatTime(msg.createdAt)}</span>
-                                                    {msg.confidence !== undefined && (
-                                                        <span className="text-[10px] bg-secondary px-1.5 py-0.5 rounded text-muted-foreground border border-border">
-                                                            {Math.round(msg.confidence * 100)}% confidence
-                                                        </span>
-                                                    )}
-                                                </div>
+                                            <div className="bg-gray-800 text-white px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
+                                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.answer}</p>
                                             </div>
                                         </div>
                                     </div>
                                 ))
+                            )}
+
+                            {/* Loading State Bubble */}
+                            {aiLoading && (
+                                <div className="flex flex-col items-start pr-12 animate-in fade-in slide-in-from-bottom-2">
+                                    <span className="text-xs text-muted-foreground mb-1 ml-1">CramRoom AI</span>
+                                    <div className="bg-gray-800 text-white px-4 py-3 rounded-2xl rounded-tl-none inline-block">
+                                        <div className="flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span className="text-sm">Thinking...</span>
+                                        </div>
+                                    </div>
+                                </div>
                             )}
                             <div ref={historyEndRef} />
                         </div>
@@ -499,11 +497,10 @@ export default function SessionDetailPage() {
                         <div className="p-4 bg-background border-t border-border">
                             <div className="relative">
                                 <textarea
-                                    className="w-full min-h-[50px] max-h-[150px] p-3 pr-12 rounded-lg border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                                    className="w-full min-h-[50px] max-h-[150px] p-3 pr-24 rounded-lg border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
                                     placeholder="Ask a question..."
                                     value={question}
                                     onChange={(e) => setQuestion(e.target.value)}
-                                    // Submit on Enter (without shift)
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter' && !e.shiftKey) {
                                             e.preventDefault();
@@ -512,18 +509,25 @@ export default function SessionDetailPage() {
                                     }}
                                     disabled={aiLoading}
                                 />
-                                <Button
-                                    size="icon"
-                                    className="absolute right-2 bottom-2 h-8 w-8"
-                                    onClick={handleAskAI}
-                                    disabled={!question.trim() || aiLoading}
-                                >
-                                    {aiLoading ? (
-                                        <Loader2 className="w-4 h-4 animate-spin" />
-                                    ) : (
-                                        <Send className="w-4 h-4" />
-                                    )}
-                                </Button>
+                                <div className="absolute right-2 bottom-2">
+                                    <Button
+                                        size="sm"
+                                        onClick={handleAskAI}
+                                        disabled={!question.trim() || aiLoading}
+                                        className="h-8"
+                                    >
+                                        {aiLoading ? (
+                                            <>
+                                                <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                                                Thinking...
+                                            </>
+                                        ) : (
+                                            <>
+                                                Ask AI <Send className="w-3 h-3 ml-2" />
+                                            </>
+                                        )}
+                                    </Button>
+                                </div>
                             </div>
                             {aiError && (
                                 <p className="text-xs text-destructive mt-2 ml-1">{aiError}</p>
@@ -536,7 +540,6 @@ export default function SessionDetailPage() {
                 </Card>
             </main>
 
-            {/* File Upload Modal */}
             <FileUploadModal
                 isOpen={isUploadModalOpen}
                 onClose={() => setIsUploadModalOpen(false)}
