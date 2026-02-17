@@ -204,6 +204,34 @@ export default function SessionDetailPage() {
         }
     };
 
+    const handleRevisionPlan = async () => {
+        if (aiLoading) return
+
+        setAiLoading(true)
+        setAiError(null)
+
+        try {
+            const response = await api.post(`/api/sessions/${params.id}/ai/query`, {
+                intent: 'revision_guidance',
+                question: 'Generate Revision Plan' // Backend requires a non-empty question
+            })
+
+            const newMessage: AIMessage = {
+                question: "Get Revision Plan",
+                answer: response.data.answer,
+                confidence: response.data.confidence,
+                createdAt: new Date().toISOString()
+            }
+
+            setAiHistory(prev => [...prev, newMessage])
+        } catch (err: any) {
+            console.error('Error getting revision plan:', err)
+            setAiError(err.response?.data?.message || 'Failed to get revision plan')
+        } finally {
+            setAiLoading(false)
+        }
+    }
+
     const handleAskAI = async () => {
         if (!question.trim()) return
 
@@ -426,14 +454,28 @@ export default function SessionDetailPage() {
 
                 {/* AI Assistant Section */}
                 <Card className="border border-border shadow-sm flex flex-col">
-                    <CardHeader className="border-b border-border bg-muted/20">
-                        <div className="flex items-center gap-2">
-                            <Sparkles className="w-5 h-5 text-primary" />
-                            <CardTitle className="text-lg">AI Session Assistant</CardTitle>
+                    <CardHeader className="border-b border-border bg-muted/20 pb-3">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                            <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                    <Sparkles className="w-5 h-5 text-primary" />
+                                    <CardTitle className="text-lg">AI Session Assistant</CardTitle>
+                                </div>
+                                <CardDescription>
+                                    Ask questions about shared materials or concepts.
+                                </CardDescription>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={handleRevisionPlan}
+                                disabled={aiLoading}
+                                className="w-full sm:w-auto"
+                            >
+                                <FileText className="w-4 h-4 mr-2" />
+                                Get Revision Plan
+                            </Button>
                         </div>
-                        <CardDescription>
-                            Ask questions about shared materials or concepts.
-                        </CardDescription>
                     </CardHeader>
 
                     <CardContent className="p-0">
