@@ -7,7 +7,7 @@ import { DummyAIProvider } from './aiProvider';
  * Define allowed intents for the AI Engine.
  * For now, strictly limited to 'concept_clarification'.
  */
-export type AIIntent = 'concept_clarification';
+export type AIIntent = 'concept_clarification' | 'revision_guidance';
 
 /**
  * 2. AIEngineInput
@@ -101,6 +101,86 @@ Question: ${question}
     };
 };
 
+
+
+/**
+ * Handler for 'revision_guidance' intent.
+ * Provides structured exam preparation advice.
+ */
+const handleRevisionGuidance = async (input: AIEngineInput): Promise<AIEngineResponse> => {
+    const provider = new DummyAIProvider();
+    const { context } = input;
+    const { sessionMeta, timeContext, flags, materials } = context;
+
+    // 1. Construct System Prompt (SYSTEM RULES)
+    const systemPrompt = `
+You are an AI exam assistant. Your goal is to help students prepare for upcoming exams.
+- Exam-focused
+- Structured output only
+- No casual language
+- No generic motivational advice
+- If you do not know the answer, admit it clearly.
+`.trim();
+
+    // 2. Construct Session Context Prompt (CONTEXT BLOCK)
+    const materialNames = materials.files.length > 0
+        ? materials.files.map(f => f.name).join(', ')
+        : "None";
+
+    let contextPrompt = `
+Session Context:
+- Subject: ${sessionMeta.subject}
+- examInDays: ${timeContext.examInDays}
+- timeRemainingInHours: ${timeContext.timeRemainingInHours}
+- Session Status: ${flags.isActive ? "Active" : "Inactive"}
+- List of material names: ${materialNames}
+`.trim();
+
+    // Check for PYQ
+    const hasPYQ = materials.files.some(f =>
+        f.name.toLowerCase().includes('pyq') ||
+        f.name.toLowerCase().includes('previous')
+    );
+
+    if (hasPYQ) {
+        contextPrompt += "\nPYQ materials detected. Prioritize repeated patterns.";
+    }
+
+    // 3. Construct Intent-Specific Prompt (INTENT RULES)
+    const intentPrompt = `
+Intent: Revision Guidance
+AI must respond in this strict format:
+
+Exam Urgency Level:
+<High / Medium / Low>
+
+Top Priority Topics:
+1.
+2.
+3.
+
+Recommended PYQ Focus:
+-
+
+Suggested 2-Hour Revision Plan:
+-
+`.trim();
+
+    // 4. Combine Prompts and Call AI Provider
+    const aiResponse = await provider.generateResponse({
+        systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
+        contextPrompt,
+        userPrompt: input.question || "Generate revision guidance."
+    });
+
+    // 6. Return AIEngineResponse
+    return {
+        answer: aiResponse.text,
+        confidence: "medium",
+        sourcesUsed: materials.files.map(f => f.name)
+    };
+};
+
 /**
  * Main entry point for the AI Engine.
  * Routes logic based on the intent provided in the input.
@@ -115,6 +195,10 @@ export const runAIEngine = async (input: AIEngineInput): Promise<AIEngineRespons
     // Route logic based on intent
     if (intent === 'concept_clarification') {
         return handleConceptClarification(input);
+    }
+
+    if (intent === 'revision_guidance') {
+        return handleRevisionGuidance(input);
     }
 
     // Explicitly handle unsupported intents (though TypeScript might catch this via type checking, runtime safety is good)

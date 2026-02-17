@@ -38,7 +38,8 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
         }
 
         // Strictly limit allowed intents for now (as per requirements)
-        if (intent !== 'concept_clarification') {
+
+        if (intent !== 'concept_clarification' && intent !== 'revision_guidance') {
             res.status(400).json({ error: `Unsupported intent: ${intent}` });
             return;
         }

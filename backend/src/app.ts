@@ -13,6 +13,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Debug logging
+app.use((req, res, next) => {
+    console.log(`[DEBUG] Incoming Request: ${req.method} ${req.url}`);
+    next();
+});
+
 // 2. Public Routes (No JWT required)
 app.get("/health", (_req, res) => {
     res.json({ status: "CramRoom backend running" });
