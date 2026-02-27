@@ -184,24 +184,43 @@ Suggested 2-Hour Revision Plan:
 /**
  * Handler for 'chunk_summary' intent.
  * Generates a keyword-focused summary for a chunk of AI interactions.
+ * This acts as internal memory compression.
  */
 const handleChunkSummary = async (input: AIEngineInput): Promise<AIEngineResponse> => {
     const provider = new DummyAIProvider();
 
+    // 1. Construct System Prompt (SYSTEM RULES)
     const systemPrompt = `
 You are an AI summarizing an exam preparation session.
-Extract the key concepts, questions, and important facts from the following interaction.
-Provide a clear, brief, structured keyword summary.
+- Academic tone
+- Extremely concise
+- Keyword-based output only
+- No explanations
+- No motivational text
+- No repetition
 `.trim();
 
+    // 2. Construct Intent-Specific Prompt (INTENT RULES)
     const intentPrompt = `
-Intent: Chunk Summary
-Maintain context for future questions.
+Return strictly in this format:
+
+Core Topics:
+-
+-
+
+Repeated Confusions:
+-
+-
+
+High-Yield Themes:
+-
+-
 `.trim();
 
+    // 3. Call AI Provider (Internal memory compression, no session context needed)
     const aiResponse = await provider.generateResponse({
         systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
-        contextPrompt: '', // Context is not strictly needed for the internal chunk summary
+        contextPrompt: '',
         userPrompt: input.question
     });
 
