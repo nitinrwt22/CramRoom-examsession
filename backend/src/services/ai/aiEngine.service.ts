@@ -7,7 +7,7 @@ import { DummyAIProvider } from './aiProvider';
  * Define allowed intents for the AI Engine.
  * For now, strictly limited to 'concept_clarification'.
  */
-export type AIIntent = 'concept_clarification' | 'revision_guidance';
+export type AIIntent = 'concept_clarification' | 'revision_guidance' | 'chunk_summary';
 
 /**
  * 2. AIEngineInput
@@ -182,6 +182,37 @@ Suggested 2-Hour Revision Plan:
 };
 
 /**
+ * Handler for 'chunk_summary' intent.
+ * Generates a keyword-focused summary for a chunk of AI interactions.
+ */
+const handleChunkSummary = async (input: AIEngineInput): Promise<AIEngineResponse> => {
+    const provider = new DummyAIProvider();
+
+    const systemPrompt = `
+You are an AI summarizing an exam preparation session.
+Extract the key concepts, questions, and important facts from the following interaction.
+Provide a clear, brief, structured keyword summary.
+`.trim();
+
+    const intentPrompt = `
+Intent: Chunk Summary
+Maintain context for future questions.
+`.trim();
+
+    const aiResponse = await provider.generateResponse({
+        systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
+        contextPrompt: '', // Context is not strictly needed for the internal chunk summary
+        userPrompt: input.question
+    });
+
+    return {
+        answer: aiResponse.text,
+        confidence: "high",
+        sourcesUsed: []
+    };
+};
+
+/**
  * Main entry point for the AI Engine.
  * Routes logic based on the intent provided in the input.
  * 
@@ -199,6 +230,10 @@ export const runAIEngine = async (input: AIEngineInput): Promise<AIEngineRespons
 
     if (intent === 'revision_guidance') {
         return handleRevisionGuidance(input);
+    }
+
+    if (intent === 'chunk_summary') {
+        return handleChunkSummary(input);
     }
 
     // Explicitly handle unsupported intents (though TypeScript might catch this via type checking, runtime safety is good)

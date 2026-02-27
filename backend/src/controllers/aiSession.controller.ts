@@ -5,6 +5,7 @@ import { buildSessionContext } from '../services/sessionContext.service';
 import { runAIEngine } from '../services/ai/aiEngine.service';
 import { getSessionDetails } from '../services/session.service';
 import { saveSessionAIMessage, getSessionAIHistory } from '../models/sessionAiMessage.model';
+import { getUnchunkedMessages, markMessagesAsChunked, saveChunkSummary } from '../models/sessionAiChunk.model';
 
 /**
  * Handles the AI query request for a specific session.
@@ -63,6 +64,42 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
             question,
             answer: aiResponse.answer
         });
+
+        // Automatic chunk-based AI memory summarization
+        try {
+            const unchunkedMessages = await getUnchunkedMessages(sessionId);
+
+            if (unchunkedMessages.length >= 20) {
+                const messagesToChunk = unchunkedMessages.slice(0, 20);
+
+                // Format them as Q: question \n A: answer
+                const formattedMessagesBlock = messagesToChunk
+                    .map(msg => `Q: ${msg.question}\nA: ${msg.answer}`)
+                    .join('\n\n');
+
+                // Call runAIEngine with chunk_summary intent
+                const summaryResponse = await runAIEngine({
+                    context: sessionContext,
+                    intent: 'chunk_summary',
+                    question: formattedMessagesBlock
+                });
+
+                // Save the summary
+                await saveChunkSummary(
+                    sessionId,
+                    0,
+                    19,
+                    summaryResponse.answer
+                );
+
+                // Mark the messages as chunked
+                const messageIds = messagesToChunk.map(msg => msg.id);
+                await markMessagesAsChunked(messageIds);
+            }
+        } catch (chunkError) {
+            console.error('Error during automatic chunk summarization:', chunkError);
+            // If chunk summarization fails, do NOT break main AI response
+        }
 
         // 4. Return Response
         res.status(200).json(aiResponse);
