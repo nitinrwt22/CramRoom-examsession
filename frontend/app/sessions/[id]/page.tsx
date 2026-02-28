@@ -232,6 +232,34 @@ export default function SessionDetailPage() {
         }
     }
 
+    const handleSessionSummary = async () => {
+        if (aiLoading) return
+
+        setAiLoading(true)
+        setAiError(null)
+
+        try {
+            const response = await api.post(`/api/sessions/${params.id}/ai/query`, {
+                intent: 'session_summary',
+                question: '' // Backend intent handles generic summary
+            })
+
+            const newMessage: AIMessage = {
+                question: "Generate Session Summary",
+                answer: response.data.answer,
+                confidence: response.data.confidence,
+                createdAt: new Date().toISOString()
+            }
+
+            setAiHistory(prev => [...prev, newMessage])
+        } catch (err: any) {
+            console.error('Error generating session summary:', err)
+            setAiError(err.response?.data?.message || 'Failed to generate session summary')
+        } finally {
+            setAiLoading(false)
+        }
+    }
+
     const handleAskAI = async () => {
         if (!question.trim()) return
 
@@ -465,16 +493,28 @@ export default function SessionDetailPage() {
                                     Ask questions about shared materials or concepts.
                                 </CardDescription>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={handleRevisionPlan}
-                                disabled={aiLoading}
-                                className="w-full sm:w-auto"
-                            >
-                                <FileText className="w-4 h-4 mr-2" />
-                                Get Revision Plan
-                            </Button>
+                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleSessionSummary}
+                                    disabled={aiLoading}
+                                    className="w-full sm:w-auto"
+                                >
+                                    <Sparkles className="w-4 h-4 mr-2" />
+                                    Generate Session Summary
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleRevisionPlan}
+                                    disabled={aiLoading}
+                                    className="w-full sm:w-auto"
+                                >
+                                    <FileText className="w-4 h-4 mr-2" />
+                                    Get Revision Plan
+                                </Button>
+                            </div>
                         </div>
                     </CardHeader>
 
