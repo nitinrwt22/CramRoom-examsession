@@ -1,13 +1,13 @@
 
 import { SessionContext } from '../sessionContext.service';
 import { DummyAIProvider } from './aiProvider';
-
+import { getChunkSummaries, getUnchunkedMessages } from '../../models/sessionAiChunk.model';
 /**
  * 1. AIIntent
  * Define allowed intents for the AI Engine.
  * For now, strictly limited to 'concept_clarification'.
  */
-export type AIIntent = 'concept_clarification' | 'revision_guidance' | 'chunk_summary';
+export type AIIntent = 'concept_clarification' | 'revision_guidance' | 'chunk_summary' | 'session_summary';
 
 /**
  * 2. AIEngineInput
@@ -232,6 +232,75 @@ High-Yield Themes:
 };
 
 /**
+ * Handler for 'session_summary' intent.
+ * Generates an overall session summary using hierarchical chunk memory.
+ */
+const handleSessionSummary = async (input: AIEngineInput): Promise<AIEngineResponse> => {
+    const provider = new DummyAIProvider();
+    const sessionIdStr = input.context.sessionMeta.sessionId;
+
+    // Fetch memory
+    const chunkSummaries = await getChunkSummaries(sessionIdStr);
+    const unchunkedMessages = await getUnchunkedMessages(sessionIdStr);
+
+    // 1. Construct System Prompt (SYSTEM RULES & FORMAT)
+    const systemPrompt = `
+SYSTEM RULES:
+- Academic tone
+- Strategic exam-focused analysis
+- Structured output only
+- No motivational language
+
+Strict output format:
+
+Session Summary:
+
+Core Topics Covered:
+-
+
+Common Weak Areas:
+-
+
+Frequently Repeated Themes:
+-
+
+Strategic Next Focus:
+-
+`.trim();
+
+    // Build hierarchical input blocks
+    let chunksText = chunkSummaries.map(c => `- ${c.summary_text}`).join('\n');
+    if (!chunksText) chunksText = "None";
+
+    let recentMessagesText = unchunkedMessages.map(m => `Q: ${m.question}\nA: ${m.answer}`).join('\n\n');
+    if (!recentMessagesText) recentMessagesText = "None";
+
+    // 2. Construct History Prompt (INPUT BLOCK)
+    const historyPrompt = `
+INPUT BLOCK:
+
+Chunk Memory Summaries:
+${chunksText}
+
+Recent Messages:
+${recentMessagesText}
+`.trim();
+
+    // 3. Call AI Provider
+    const aiResponse = await provider.generateResponse({
+        systemPrompt: systemPrompt,
+        contextPrompt: historyPrompt,
+        userPrompt: input.question || "Generate session summary."
+    });
+
+    return {
+        answer: aiResponse.text,
+        confidence: "high",
+        sourcesUsed: []
+    };
+};
+
+/**
  * Main entry point for the AI Engine.
  * Routes logic based on the intent provided in the input.
  * 
@@ -253,6 +322,10 @@ export const runAIEngine = async (input: AIEngineInput): Promise<AIEngineRespons
 
     if (intent === 'chunk_summary') {
         return handleChunkSummary(input);
+    }
+
+    if (intent === 'session_summary') {
+        return handleSessionSummary(input);
     }
 
     // Explicitly handle unsupported intents (though TypeScript might catch this via type checking, runtime safety is good)
