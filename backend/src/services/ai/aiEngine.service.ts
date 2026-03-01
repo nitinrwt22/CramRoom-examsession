@@ -2,7 +2,8 @@
 import { SessionContext } from '../sessionContext.service';
 import { DummyAIProvider } from './aiProvider';
 import { getChunkSummaries, getUnchunkedMessages } from '../../models/sessionAiChunk.model';
-import { detectWeakTopics } from '../weakTopicAnalytics.service';
+import { detectWeakTopics } from './weakTopicAnalytics.service';
+import { logAIEvent } from "../../utils/aiLogger";
 /**
  * 1. AIIntent
  * Define allowed intents for the AI Engine.
@@ -83,11 +84,37 @@ Question: ${question}
     // For now, we follow the interface structure.
 
     // Call AI provider
-    const aiResponse = await provider.generateResponse({
-        systemPrompt: `${systemPrompt}\n\n${intentPrompt}`, // Combining intent into system/instruction for better adherence
-        contextPrompt,
-        userPrompt
-    });
+    const sessionId = context.sessionMeta.sessionId;
+    const startTime = Date.now();
+    let aiResponse;
+    try {
+        aiResponse = await provider.generateResponse({
+            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`, // Combining intent into system/instruction for better adherence
+            contextPrompt,
+            userPrompt
+        });
+
+        const durationMs = Date.now() - startTime;
+        logAIEvent({
+            type: "AI_CALL",
+            sessionId,
+            intent: input.intent,
+            durationMs,
+            metadata: {
+                responseLength: aiResponse.text.length
+            }
+        });
+    } catch (error: any) {
+        logAIEvent({
+            type: "AI_ERROR",
+            sessionId,
+            intent: input.intent,
+            metadata: {
+                error: error.message
+            }
+        });
+        throw error;
+    }
 
     // Extract sources if any (simple heuristic for now, matching material names in answer)
     // In a real scenario, the LLM might return cited sources explicitly.
@@ -168,11 +195,37 @@ Suggested 2-Hour Revision Plan:
 `.trim();
 
     // 4. Combine Prompts and Call AI Provider
-    const aiResponse = await provider.generateResponse({
-        systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
-        contextPrompt,
-        userPrompt: input.question || "Generate revision guidance."
-    });
+    const sessionId = context.sessionMeta.sessionId;
+    const startTime = Date.now();
+    let aiResponse;
+    try {
+        aiResponse = await provider.generateResponse({
+            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
+            contextPrompt,
+            userPrompt: input.question || "Generate revision guidance."
+        });
+
+        const durationMs = Date.now() - startTime;
+        logAIEvent({
+            type: "AI_CALL",
+            sessionId,
+            intent: input.intent,
+            durationMs,
+            metadata: {
+                responseLength: aiResponse.text.length
+            }
+        });
+    } catch (error: any) {
+        logAIEvent({
+            type: "AI_ERROR",
+            sessionId,
+            intent: input.intent,
+            metadata: {
+                error: error.message
+            }
+        });
+        throw error;
+    }
 
     // 6. Return AIEngineResponse
     return {
@@ -219,11 +272,37 @@ High-Yield Themes:
 `.trim();
 
     // 3. Call AI Provider (Internal memory compression, no session context needed)
-    const aiResponse = await provider.generateResponse({
-        systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
-        contextPrompt: '',
-        userPrompt: input.question
-    });
+    const sessionId = input.context.sessionMeta.sessionId;
+    const startTime = Date.now();
+    let aiResponse;
+    try {
+        aiResponse = await provider.generateResponse({
+            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
+            contextPrompt: '',
+            userPrompt: input.question
+        });
+
+        const durationMs = Date.now() - startTime;
+        logAIEvent({
+            type: "AI_CALL",
+            sessionId,
+            intent: input.intent,
+            durationMs,
+            metadata: {
+                responseLength: aiResponse.text.length
+            }
+        });
+    } catch (error: any) {
+        logAIEvent({
+            type: "AI_ERROR",
+            sessionId,
+            intent: input.intent,
+            metadata: {
+                error: error.message
+            }
+        });
+        throw error;
+    }
 
     return {
         answer: aiResponse.text,
@@ -301,11 +380,36 @@ ${recentMessagesText}
 `.trim();
 
     // 3. Call AI Provider
-    const aiResponse = await provider.generateResponse({
-        systemPrompt: systemPrompt,
-        contextPrompt: historyPrompt,
-        userPrompt: input.question || "Generate session summary."
-    });
+    const startTime = Date.now();
+    let aiResponse;
+    try {
+        aiResponse = await provider.generateResponse({
+            systemPrompt: systemPrompt,
+            contextPrompt: historyPrompt,
+            userPrompt: input.question || "Generate session summary."
+        });
+
+        const durationMs = Date.now() - startTime;
+        logAIEvent({
+            type: "AI_CALL",
+            sessionId: sessionIdStr,
+            intent: input.intent,
+            durationMs,
+            metadata: {
+                responseLength: aiResponse.text.length
+            }
+        });
+    } catch (error: any) {
+        logAIEvent({
+            type: "AI_ERROR",
+            sessionId: sessionIdStr,
+            intent: input.intent,
+            metadata: {
+                error: error.message
+            }
+        });
+        throw error;
+    }
 
     return {
         answer: aiResponse.text,
