@@ -2,7 +2,7 @@ import express from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth.middleware';
 import * as sessionService from '../services/session.service';
 import * as sessionFileService from '../services/sessionFile.service';
-import { handleAIQuery, getSessionHistory } from '../controllers/aiSession.controller';
+import { handleAIQuery, getSessionHistory, getWeakTopics } from '../controllers/aiSession.controller';
 import { upload } from '../config/multer';
 
 
@@ -135,5 +135,8 @@ router.post('/:sessionId/ai/query', handleAIQuery);
 
 // GET /session/:sessionId/ai/history
 router.get('/:sessionId/ai/history', getSessionHistory);
+
+// GET /session/:sessionId/ai/weak-topics
+router.get('/:sessionId/ai/weak-topics', getWeakTopics);
 
 export default router;

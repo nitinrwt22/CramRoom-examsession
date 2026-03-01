@@ -5,6 +5,7 @@ import { runAIEngine } from '../services/ai/aiEngine.service';
 import { getSessionDetails } from '../services/session.service';
 import { saveSessionAIMessage, getSessionAIHistory } from '../models/sessionAiMessage.model';
 import { getUnchunkedMessages, markMessagesAsChunked, saveChunkSummary } from '../models/sessionAiChunk.model';
+import { detectWeakTopics } from '../services/ai/weakTopicAnalytics.service';
 import { logAIEvent } from "../utils/aiLogger";
 
 /**
@@ -195,6 +196,44 @@ export const getSessionHistory = async (req: AuthRequest, res: Response): Promis
             res.status(403).json({ error: error.message });
         } else {
             res.status(500).json({ error: 'Internal Server Error fetching history' });
+        }
+    }
+};
+
+/**
+ * Retrieves the weak topic analytics for a session.
+ */
+export const getWeakTopics = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const sessionId = req.params.sessionId;
+        const userId = req.user?.id;
+
+        if (!sessionId) {
+            res.status(400).json({ error: 'Missing sessionId parameter' });
+            return;
+        }
+
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+
+        // Validate Session Participation
+        const sessionIdNum = parseInt(sessionId, 10);
+        await getSessionDetails(sessionIdNum, userId);
+
+        // Fetch weak topics
+        const weakTopics = await detectWeakTopics(sessionId);
+
+        res.status(200).json({ weakTopics });
+
+    } catch (error: any) {
+        console.error('Error in getWeakTopics:', error);
+
+        if (error.message.includes('Session not found or user is not a participant')) {
+            res.status(403).json({ error: error.message });
+        } else {
+            res.status(500).json({ error: 'Internal Server Error fetching weak topics' });
         }
     }
 };
