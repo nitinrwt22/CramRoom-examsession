@@ -2,6 +2,7 @@
 import { SessionContext } from '../sessionContext.service';
 import { DummyAIProvider } from './aiProvider';
 import { getChunkSummaries, getUnchunkedMessages } from '../../models/sessionAiChunk.model';
+import { detectWeakTopics } from '../weakTopicAnalytics.service';
 /**
  * 1. AIIntent
  * Define allowed intents for the AI Engine.
@@ -243,6 +244,9 @@ const handleSessionSummary = async (input: AIEngineInput): Promise<AIEngineRespo
     const chunkSummaries = await getChunkSummaries(sessionIdStr);
     const unchunkedMessages = await getUnchunkedMessages(sessionIdStr);
 
+    // Call weak topic analytics
+    const weakTopics = await detectWeakTopics(sessionIdStr);
+
     // 1. Construct System Prompt (SYSTEM RULES & FORMAT)
     const systemPrompt = `
 SYSTEM RULES:
@@ -258,8 +262,8 @@ Session Summary:
 Core Topics Covered:
 -
 
-Common Weak Areas:
--
+Common Weak Areas (Evidence-Based):
+- Include topics from deterministic evidence if valid
 
 Frequently Repeated Themes:
 -
@@ -275,9 +279,19 @@ Strategic Next Focus:
     let recentMessagesText = unchunkedMessages.map(m => `Q: ${m.question}\nA: ${m.answer}`).join('\n\n');
     if (!recentMessagesText) recentMessagesText = "None";
 
+    // Build evidence block
+    let weakTopicEvidence = "Weak Topic Evidence (Deterministic Analysis):\n";
+    if (weakTopics && weakTopics.length > 0) {
+        weakTopicEvidence += weakTopics.map((wt: any) => `- ${wt.topic} (frequency: ${wt.frequency})`).join('\n');
+    } else {
+        weakTopicEvidence += "None";
+    }
+
     // 2. Construct History Prompt (INPUT BLOCK)
     const historyPrompt = `
 INPUT BLOCK:
+
+${weakTopicEvidence}
 
 Chunk Memory Summaries:
 ${chunksText}

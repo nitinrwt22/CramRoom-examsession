@@ -33,14 +33,20 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
             return;
         }
 
-        if (!intent || !question) {
-            res.status(400).json({ error: 'Missing required fields: intent, question' });
+        if (!intent) {
+            res.status(400).json({ error: 'Missing required field: intent' });
+            return;
+        }
+
+        // Question is required for some intents, but not session_summary
+        if (intent !== 'session_summary' && !question) {
+            res.status(400).json({ error: 'Missing required field: question' });
             return;
         }
 
         // Strictly limit allowed intents for now (as per requirements)
-
-        if (intent !== 'concept_clarification' && intent !== 'revision_guidance') {
+        const allowedIntents = ['concept_clarification', 'revision_guidance', 'chunk_summary', 'session_summary'];
+        if (!allowedIntents.includes(intent)) {
             res.status(400).json({ error: `Unsupported intent: ${intent}` });
             return;
         }
