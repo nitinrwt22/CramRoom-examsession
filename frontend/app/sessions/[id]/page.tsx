@@ -63,6 +63,10 @@ export default function SessionDetailPage() {
     const [aiLoading, setAiLoading] = useState(false)
     const [aiError, setAiError] = useState<string | null>(null)
 
+    // Weak Topics State
+    const [weakTopics, setWeakTopics] = useState<{ topic: string; frequency: number }[]>([])
+    const [weakTopicsLoading, setWeakTopicsLoading] = useState(true)
+
     // Ref for auto-scrolling
     const historyEndRef = useRef<HTMLDivElement>(null)
 
@@ -102,6 +106,18 @@ export default function SessionDetailPage() {
         }
     }
 
+    const fetchWeakTopics = async () => {
+        setWeakTopicsLoading(true)
+        try {
+            const response = await api.get(`/api/sessions/${params.id}/ai/weak-topics`)
+            setWeakTopics(response.data.weakTopics || [])
+        } catch (err) {
+            console.error('Error fetching weak topics:', err)
+        } finally {
+            setWeakTopicsLoading(false)
+        }
+    }
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -120,6 +136,9 @@ export default function SessionDetailPage() {
 
                 // Fetch AI history
                 await fetchAIHistory()
+
+                // Fetch weak topics
+                await fetchWeakTopics()
             } catch (err) {
                 console.error('Error fetching session:', err)
                 setError('Failed to load session details')
@@ -475,6 +494,51 @@ export default function SessionDetailPage() {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Weak Topics Section */}
+                <Card className="border border-border shadow-sm">
+                    <CardHeader className="pb-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg">Weak Topics Detected</CardTitle>
+                                <CardDescription>Areas that may need more review</CardDescription>
+                            </div>
+                            <Button
+                                onClick={fetchWeakTopics}
+                                variant="outline"
+                                size="sm"
+                                disabled={weakTopicsLoading}
+                                className="gap-2"
+                            >
+                                <Loader2 className={`w-4 h-4 ${weakTopicsLoading ? 'animate-spin' : ''}`} />
+                                Refresh Analysis
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {weakTopicsLoading ? (
+                            <div className="flex justify-center items-center h-24 text-muted-foreground">
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                            </div>
+                        ) : weakTopics.length === 0 ? (
+                            <div className="text-center py-6 bg-secondary/10 rounded-lg border border-dashed border-border">
+                                <p className="text-sm text-muted-foreground">No significant weak topics detected yet.</p>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-3">
+                                {weakTopics.map((topic, index) => (
+                                    <div
+                                        key={index}
+                                        className="bg-destructive/10 text-destructive border border-destructive/20 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
+                                    >
+                                        <span>{topic.topic}</span>
+                                        <span className="opacity-70 text-xs">({topic.frequency} mentions)</span>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </CardContent>
