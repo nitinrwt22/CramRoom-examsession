@@ -1,4 +1,3 @@
-
 import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { buildSessionContext } from '../services/sessionContext.service';
@@ -6,6 +5,7 @@ import { runAIEngine } from '../services/ai/aiEngine.service';
 import { getSessionDetails } from '../services/session.service';
 import { saveSessionAIMessage, getSessionAIHistory } from '../models/sessionAiMessage.model';
 import { getUnchunkedMessages, markMessagesAsChunked, saveChunkSummary } from '../models/sessionAiChunk.model';
+import { logAIEvent } from "../utils/aiLogger";
 
 /**
  * Handles the AI query request for a specific session.
@@ -76,6 +76,7 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
             const unchunkedMessages = await getUnchunkedMessages(sessionId);
 
             if (unchunkedMessages.length >= 20) {
+                const startTime = Date.now();
                 const messagesToChunk = unchunkedMessages.slice(0, 20);
 
                 // Format them as Q: question \n A: answer
@@ -101,9 +102,28 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
                 // Mark the messages as chunked
                 const messageIds = messagesToChunk.map(msg => msg.id);
                 await markMessagesAsChunked(messageIds);
+
+                const durationMs = Date.now() - startTime;
+                logAIEvent({
+                    type: "CHUNK_CREATED",
+                    sessionId,
+                    durationMs,
+                    metadata: {
+                        chunkSize: 20,
+                        summaryLength: summaryResponse.answer.length
+                    }
+                });
             }
-        } catch (chunkError) {
-            console.error('Error during automatic chunk summarization:', chunkError);
+        } catch (error: any) {
+            console.error('Error during automatic chunk summarization:', error);
+            logAIEvent({
+                type: "AI_ERROR",
+                sessionId,
+                intent: "chunk_summary",
+                metadata: {
+                    error: error.message
+                }
+            });
             // If chunk summarization fails, do NOT break main AI response
         }
 
