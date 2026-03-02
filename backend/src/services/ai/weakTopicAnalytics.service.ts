@@ -9,14 +9,14 @@ export interface WeakTopic {
 
 // Stop words to ignore during extraction
 const STOP_WORDS = new Set([
-    "the", "is", "are", "what", "why", "how",
-    "explain", "tell", "about", "this", "that",
-    "and", "with", "for", "from"
+    "the", "is", "are", "what", "why", "how", "explain", "tell", "about", "this", "that", "and", "with", "for", "from",
+    "generate", "create", "session", "question", "answer", "summary", "revision", "analysis", "topic",
+    "plan", "help", "show", "give", "make", "use", "learn", "understand", "discuss", "describe", "define"
 ]);
 
 /**
  * Deterministically analyzes session history to detect weak topics.
- * Extracts keywords from user questions and chunk summaries.
+ * Extracts keywords from user questions, chunk summaries, and revision guidance.
  * 
  * @param sessionId - The session ID as a string
  * @returns Array of top 3 weak topics
@@ -31,44 +31,43 @@ export const detectWeakTopics = async (sessionId: string): Promise<WeakTopic[]> 
         const messages = await getSessionAIHistory(sessionIdNum);
         const chunkSummaries = await getChunkSummaries(sessionId);
 
-        // Combine question text and summary text
-        const textSources: string[] = [];
+        const topicScores = new Map<string, number>();
 
-        messages.forEach(msg => {
-            if (msg.question) textSources.push(msg.question);
-        });
-
-        chunkSummaries.forEach(chunk => {
-            if (chunk.summary_text) textSources.push(chunk.summary_text);
-        });
-
-        // Extract and count keywords
-        const wordCounts: Record<string, number> = {};
-
-        textSources.forEach(text => {
+        const processText = (text: string | undefined | null, increment: number) => {
+            if (!text) return;
             // Convert to lowercase and remove punctuation
             const cleanText = text.toLowerCase().replace(/[^\w\s]|_/g, ' ');
-
-            // Split into words
             const words = cleanText.split(/\s+/);
 
             words.forEach(word => {
-                // Ignore short words and stop words
-                if (word.length >= 4 && !STOP_WORDS.has(word)) {
-                    wordCounts[word] = (wordCounts[word] || 0) + 1;
+                // Ignore short words, stop words, and words ending with 'ing'
+                if (word.length >= 4 && !STOP_WORDS.has(word) && !word.endsWith('ing')) {
+                    const currentScore = topicScores.get(word) || 0;
+                    topicScores.set(word, currentScore + increment);
                 }
             });
+        };
+
+        chunkSummaries.forEach(chunk => {
+            processText(chunk.summary_text, 3);
         });
 
-        // Filter by frequency >= 2
+        messages.forEach(msg => {
+            processText(msg.question, 1);
+            if (msg.intent === "revision_guidance") {
+                processText(msg.answer, 2);
+            }
+        });
+
+        // Keep topics with score >= 3
         const weakTopics: WeakTopic[] = [];
-        for (const [topic, frequency] of Object.entries(wordCounts)) {
-            if (frequency >= 2) {
-                weakTopics.push({ topic, frequency });
+        for (const [topic, score] of topicScores.entries()) {
+            if (score >= 3) {
+                weakTopics.push({ topic, frequency: score });
             }
         }
 
-        // Sort descending by frequency and return top 3
+        // Sort descending by score and return top 3
         const result = weakTopics
             .sort((a, b) => b.frequency - a.frequency)
             .slice(0, 3);
