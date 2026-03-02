@@ -1,6 +1,7 @@
 import { getSessionAIHistory } from '../../models/sessionAiMessage.model';
 import { getChunkSummaries } from '../../models/sessionAiChunk.model';
 import { logAIEvent } from "../../utils/aiLogger";
+import pool from '../../config/database';
 
 export interface WeakTopic {
     topic: string;
@@ -81,6 +82,27 @@ export const detectWeakTopics = async (sessionId: string): Promise<WeakTopic[]> 
                 topics: result
             }
         });
+
+        if (result.length > 0) {
+            try {
+                const insertQuery = `
+                    INSERT INTO session_topic_progress (session_id, topic, score)
+                    VALUES ($1, $2, $3)
+                `;
+                for (const topic of result) {
+                    await pool.query(insertQuery, [sessionIdNum, topic.topic, topic.frequency]);
+                }
+            } catch (dbError: any) {
+                logAIEvent({
+                    type: "AI_ERROR",
+                    sessionId,
+                    intent: "weak_topic_snapshot_db",
+                    metadata: {
+                        error: dbError.message
+                    }
+                });
+            }
+        }
 
         return result;
     } catch (error: any) {
