@@ -147,7 +147,7 @@ export default function SessionsPage() {
                             <h1 className="text-3xl font-bold text-foreground">My Sessions</h1>
                             <p className="text-sm text-muted-foreground mt-1">Manage your study groups</p>
                         </div>
-                        <Button className="gap-2">
+                        <Button onClick={() => router.push('/sessions/create')} className="gap-2">
                             <Plus className="w-4 h-4" />
                             New Session
                         </Button>
