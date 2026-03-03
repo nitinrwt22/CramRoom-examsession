@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
-import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles } from 'lucide-react'
+import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, TrendingDown, TrendingUp, Minus } from 'lucide-react'
 import api from '@/lib/axios'
 
 interface SessionFile {
@@ -41,9 +41,12 @@ interface AIMessage {
     confidence?: number
 }
 
-interface AIQueryResponse {
-    answer: string
-    confidence: number
+
+interface ProgressItem {
+    topic: string
+    currentScore: number
+    previousScore?: number
+    trend: 'improving' | 'worsening' | 'stable' | 'insufficient_data'
 }
 
 export default function SessionDetailPage() {
@@ -66,6 +69,10 @@ export default function SessionDetailPage() {
     // Weak Topics State
     const [weakTopics, setWeakTopics] = useState<{ topic: string; frequency: number }[]>([])
     const [weakTopicsLoading, setWeakTopicsLoading] = useState(true)
+
+    // Topic Progress State
+    const [progress, setProgress] = useState<ProgressItem[]>([])
+    const [progressLoading, setProgressLoading] = useState(true)
 
     // Ref for auto-scrolling
     const historyEndRef = useRef<HTMLDivElement>(null)
@@ -118,6 +125,19 @@ export default function SessionDetailPage() {
         }
     }
 
+    const fetchProgress = async () => {
+        setProgressLoading(true)
+        try {
+            const response = await api.get(`/api/sessions/${params.id}/ai/progress`)
+            const data = response.data
+            setProgress(Array.isArray(data) ? data : (data?.progress || []))
+        } catch (err) {
+            console.error('Error fetching progress:', err)
+        } finally {
+            setProgressLoading(false)
+        }
+    }
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -139,6 +159,9 @@ export default function SessionDetailPage() {
 
                 // Fetch weak topics
                 await fetchWeakTopics()
+
+                // Fetch progress
+                await fetchProgress()
             } catch (err) {
                 console.error('Error fetching session:', err)
                 setError('Failed to load session details')
@@ -151,6 +174,7 @@ export default function SessionDetailPage() {
         if (params.id) {
             fetchData()
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.id, router])
 
     const handleUploadFile = async (file: File) => {
@@ -243,9 +267,10 @@ export default function SessionDetailPage() {
             }
 
             setAiHistory(prev => [...prev, newMessage])
-        } catch (err: any) {
+        } catch (err) {
             console.error('Error getting revision plan:', err)
-            setAiError(err.response?.data?.message || 'Failed to get revision plan')
+            const axiosErr = err as { response?: { data?: { message?: string } } }
+            setAiError(axiosErr.response?.data?.message || 'Failed to get revision plan')
         } finally {
             setAiLoading(false)
         }
@@ -271,9 +296,10 @@ export default function SessionDetailPage() {
             }
 
             setAiHistory(prev => [...prev, newMessage])
-        } catch (err: any) {
+        } catch (err) {
             console.error('Error generating session summary:', err)
-            setAiError(err.response?.data?.message || 'Failed to generate session summary')
+            const axiosErr = err as { response?: { data?: { message?: string } } }
+            setAiError(axiosErr.response?.data?.message || 'Failed to generate session summary')
         } finally {
             setAiLoading(false)
         }
@@ -300,11 +326,26 @@ export default function SessionDetailPage() {
 
             setAiHistory(prev => [...prev, newMessage])
             setQuestion('')
-        } catch (err: any) {
+        } catch (err) {
             console.error('Error asking AI:', err)
-            setAiError(err.response?.data?.message || 'Failed to get AI response')
+            const axiosErr = err as { response?: { data?: { message?: string } } }
+            setAiError(axiosErr.response?.data?.message || 'Failed to get AI response')
         } finally {
             setAiLoading(false)
+        }
+    }
+
+    const renderTrend = (trend: string) => {
+        switch (trend) {
+            case 'improving':
+                return <span className="text-green-500 flex items-center gap-1 text-xs"><TrendingDown className="w-3 h-3" /> Improving</span>
+            case 'worsening':
+                return <span className="text-red-500 flex items-center gap-1 text-xs"><TrendingUp className="w-3 h-3" /> Worsening</span>
+            case 'stable':
+                return <span className="text-yellow-500 flex items-center gap-1 text-xs"><Minus className="w-3 h-3" /> Stable</span>
+            case 'insufficient_data':
+            default:
+                return <span className="text-muted-foreground text-xs">Insufficient Data</span>
         }
     }
 
@@ -537,6 +578,65 @@ export default function SessionDetailPage() {
                                     >
                                         <span>{topic.topic}</span>
                                         <span className="opacity-70 text-xs">({topic.frequency} mentions)</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Topic Progress Section */}
+                <Card className="border border-border shadow-sm">
+                    <CardHeader className="pb-4">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-lg">Topic Progress</CardTitle>
+                                <CardDescription>Track your weak area improvements</CardDescription>
+                            </div>
+                            <Button
+                                onClick={fetchProgress}
+                                variant="outline"
+                                size="sm"
+                                disabled={progressLoading}
+                                className="gap-2"
+                            >
+                                <Loader2 className={`w-4 h-4 ${progressLoading ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </Button>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {progressLoading ? (
+                            <div className="flex justify-center items-center h-24 text-muted-foreground">
+                                <Loader2 className="w-6 h-6 animate-spin" />
+                            </div>
+                        ) : progress.length === 0 ? (
+                            <div className="text-center py-6 bg-secondary/10 rounded-lg border border-dashed border-border">
+                                <p className="text-sm text-muted-foreground">No progress data available yet.</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {progress.map((item, index) => (
+                                    <div
+                                        key={index}
+                                        className="bg-card border border-border p-4 rounded-lg shadow-sm flex flex-col gap-2"
+                                    >
+                                        <div className="flex items-start justify-between">
+                                            <span className="font-medium text-foreground">{item.topic}</span>
+                                            {renderTrend(item.trend)}
+                                        </div>
+                                        <div className="flex items-center gap-4 text-sm mt-1">
+                                            <div>
+                                                <span className="text-muted-foreground text-xs block mb-0.5">Current</span>
+                                                <span className="font-bold">{item.currentScore}</span>
+                                            </div>
+                                            {item.previousScore !== undefined && item.previousScore !== null && (
+                                                <div>
+                                                    <span className="text-muted-foreground text-xs block mb-0.5">Previous</span>
+                                                    <span className="text-muted-foreground">{item.previousScore}</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
