@@ -101,23 +101,37 @@ export const detectWeakTopics = async (sessionId: string): Promise<WeakTopic[]> 
         });
 
         if (result.length > 0) {
-            try {
-                const insertQuery = `
-                    INSERT INTO session_topic_progress (session_id, topic, score)
-                    VALUES ($1, $2, $3)
-                `;
-                for (const topic of result) {
-                    await pool.query(insertQuery, [sessionIdNum, topic.topic, topic.frequency]);
-                }
-            } catch (dbError: any) {
-                logAIEvent({
-                    type: "AI_ERROR",
-                    sessionId,
-                    intent: "weak_topic_snapshot_db",
-                    metadata: {
-                        error: dbError.message
+            const selectQuery = `
+                SELECT score
+                FROM session_topic_progress
+                WHERE session_id = $1 AND topic = $2
+                ORDER BY recorded_at DESC
+                LIMIT 1
+            `;
+            const insertQuery = `
+                INSERT INTO session_topic_progress (session_id, topic, score)
+                VALUES ($1, $2, $3)
+            `;
+
+            for (const topic of result) {
+                try {
+                    const previousRes = await pool.query(selectQuery, [sessionIdNum, topic.topic]);
+                    const previousScore = previousRes.rows.length > 0 ? previousRes.rows[0].score : null;
+
+                    if (previousScore === null || previousScore !== topic.frequency) {
+                        await pool.query(insertQuery, [sessionIdNum, topic.topic, topic.frequency]);
                     }
-                });
+                } catch (dbError: any) {
+                    logAIEvent({
+                        type: "AI_ERROR",
+                        sessionId,
+                        intent: "weak_topic_snapshot_db",
+                        metadata: {
+                            error: dbError.message,
+                            failedTopic: topic.topic
+                        }
+                    });
+                }
             }
         }
 
