@@ -8,11 +8,15 @@ export interface WeakTopic {
     frequency: number;
 }
 
-// Stop words to ignore during extraction
-const STOP_WORDS = new Set([
-    "the", "is", "are", "what", "why", "how", "explain", "tell", "about", "this", "that", "and", "with", "for", "from",
-    "generate", "create", "session", "question", "answer", "summary", "revision", "analysis", "topic",
-    "plan", "help", "show", "give", "make", "use", "learn", "understand", "discuss", "describe", "define"
+const genericWords = new Set([
+    "generate", "create", "session", "question", "answer", "summary", "revision", "analysis",
+    "topic", "plan", "help", "show", "make", "use", "learn", "understand", "discuss",
+    "describe", "define", "design", "exam", "study", "problem", "example", "concept",
+    "section", "part", "thing", "material", "guide"
+]);
+
+const timeWords = new Set([
+    "time", "minute", "minutes", "hour", "hours", "day", "days", "week", "weeks", "month", "months"
 ]);
 
 /**
@@ -33,37 +37,50 @@ export const detectWeakTopics = async (sessionId: string): Promise<WeakTopic[]> 
         const chunkSummaries = await getChunkSummaries(sessionId);
 
         const topicScores = new Map<string, number>();
+        const chunkWords = new Set<string>();
 
-        const processText = (text: string | undefined | null, increment: number) => {
+        const processText = (text: string | undefined | null, increment: number, isChunk: boolean = false) => {
             if (!text) return;
             // Convert to lowercase and remove punctuation
             const cleanText = text.toLowerCase().replace(/[^\w\s]|_/g, ' ');
             const words = cleanText.split(/\s+/);
 
-            words.forEach(word => {
-                // Ignore short words, stop words, and words ending with 'ing'
-                if (word.length >= 4 && !STOP_WORDS.has(word) && !word.endsWith('ing')) {
-                    const currentScore = topicScores.get(word) || 0;
-                    topicScores.set(word, currentScore + increment);
+            words.forEach(w => {
+                // Ignore conditions
+                if (w.length < 5 || genericWords.has(w) || timeWords.has(w) || w.endsWith('ing')) {
+                    return;
+                }
+
+                let word = w;
+                // Simple plural normalization
+                if (word.endsWith('s')) {
+                    word = word.slice(0, -1);
+                }
+
+                const currentScore = topicScores.get(word) || 0;
+                topicScores.set(word, currentScore + increment);
+
+                if (isChunk) {
+                    chunkWords.add(word);
                 }
             });
         };
 
         chunkSummaries.forEach(chunk => {
-            processText(chunk.summary_text, 3);
+            processText(chunk.summary_text, 3, true);
         });
 
         messages.forEach(msg => {
-            processText(msg.question, 1);
+            processText(msg.question, 1, false);
             if (msg.intent === "revision_guidance") {
-                processText(msg.answer, 2);
+                processText(msg.answer, 2, false);
             }
         });
 
-        // Keep topics with score >= 3
         const weakTopics: WeakTopic[] = [];
         for (const [topic, score] of topicScores.entries()) {
-            if (score >= 3) {
+            // Only allow topic if: (score >= 3 AND appears in at least one chunk summary) OR score >= 4
+            if ((score >= 3 && chunkWords.has(topic)) || score >= 4) {
                 weakTopics.push({ topic, frequency: score });
             }
         }
