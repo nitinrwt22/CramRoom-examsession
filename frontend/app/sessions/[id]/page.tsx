@@ -78,12 +78,17 @@ export default function SessionDetailPage() {
     const historyEndRef = useRef<HTMLDivElement>(null)
 
     const scrollToBottom = () => {
-        historyEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        // Wait for DOM to finish rendering messages before scrolling
+        setTimeout(() => {
+            historyEndRef.current?.scrollIntoView({ behavior: 'auto' })
+        }, 100)
     }
 
     useEffect(() => {
-        scrollToBottom()
-    }, [aiHistory, aiLoading])
+        if (aiHistory.length > 0) {
+            scrollToBottom()
+        }
+    }, [aiHistory.length, aiLoading])
 
     const fetchFiles = async () => {
         try {
