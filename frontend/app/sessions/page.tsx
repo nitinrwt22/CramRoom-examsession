@@ -6,7 +6,7 @@ import { isLoggedIn } from '@/lib/auth'
 import api from '@/lib/axios'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Plus, Clock, CheckCircle2, ArrowRight } from 'lucide-react'
+import { Plus, Clock, CheckCircle2, ArrowRight, UserPlus } from 'lucide-react'
 
 interface Session {
     id: string
@@ -147,10 +147,16 @@ export default function SessionsPage() {
                             <h1 className="text-3xl font-bold text-foreground">My Sessions</h1>
                             <p className="text-sm text-muted-foreground mt-1">Manage your study groups</p>
                         </div>
-                        <Button onClick={() => router.push('/sessions/create')} className="gap-2">
-                            <Plus className="w-4 h-4" />
-                            New Session
-                        </Button>
+                        <div className="flex gap-3">
+                            <Button variant="outline" onClick={() => router.push('/sessions/join')} className="gap-2">
+                                <UserPlus className="w-4 h-4" />
+                                Join Session
+                            </Button>
+                            <Button onClick={() => router.push('/sessions/create')} className="gap-2">
+                                <Plus className="w-4 h-4" />
+                                New Session
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </header>
