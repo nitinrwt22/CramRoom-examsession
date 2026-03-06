@@ -1,173 +1,50 @@
-'use client'
+"use client";
 
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { isLoggedIn } from '@/lib/auth'
-import api from '@/lib/axios'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { BookOpen, Clock, FileUp } from 'lucide-react'
-
-interface DashboardStats {
-    participantActive: number;
-    participantExpired: number;
-    hostedSessions: number;
-    uploadedFiles: number;
-}
+import ProtectedRoute from "@/components/auth/ProtectedRoute";
+import { useRouter } from "next/navigation";
+import { Logo } from "@/components/ui/Logo";
 
 export default function DashboardPage() {
-    const router = useRouter()
-    const [stats, setStats] = useState<DashboardStats | null>(null)
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState<string | null>(null)
+    const router = useRouter();
 
-    useEffect(() => {
-        if (!isLoggedIn()) {
-            router.push('/login')
-            return
-        }
-
-        const fetchDashboardData = async () => {
-            try {
-                setLoading(true)
-                const response = await api.get('/dashboard')
-                setStats(response.data)
-                setError(null)
-            } catch (err) {
-                console.error("Failed to fetch dashboard data:", err)
-                setError("Failed to load dashboard data. Please try again later.")
-            } finally {
-                setLoading(false)
-            }
-        }
-
-        fetchDashboardData()
-    }, [router])
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                    <p className="text-muted-foreground">Loading dashboard...</p>
-                </div>
-            </div>
-        )
-    }
-
-    if (error) {
-        return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <div className="text-center p-6 max-w-sm mx-auto">
-                    <p className="text-red-500 mb-4">{error}</p>
-                    <button
-                        onClick={() => window.location.reload()}
-                        className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                    >
-                        Retry
-                    </button>
-                </div>
-            </div>
-        )
-    }
-
-    const sessionsJoined = (stats?.participantActive || 0) + (stats?.participantExpired || 0);
-    const totalSessions = sessionsJoined + (stats?.hostedSessions || 0);
+    const handleLogout = () => {
+        localStorage.removeItem("token");
+        router.push("/");
+    };
 
     return (
-        <div className="min-h-screen bg-background">
-            {/* Header */}
-            <header className="border-b border-border bg-card sticky top-0 z-10">
-                <div className="max-w-7xl mx-auto px-4 py-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-                            <p className="text-sm text-muted-foreground mt-1">Welcome back to your study hub</p>
+        <ProtectedRoute>
+            <div className="min-h-screen bg-background-light dark:bg-background-dark text-slate-900 dark:text-white p-8">
+                <div className="max-w-4xl mx-auto">
+                    <header className="flex justify-between items-center mb-12">
+                        <div className="flex items-center gap-2">
+                            <Logo className="w-10 h-10" iconSize={24} />
+                            <span className="text-2xl font-bold tracking-tight">CramRoom</span>
                         </div>
-                    </div>
+
+                        <button
+                            onClick={handleLogout}
+                            className="px-4 py-2 border border-slate-200 dark:border-slate-800 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors"
+                        >
+                            Logout
+                        </button>
+                    </header>
+
+                    <main>
+                        <h1 className="text-4xl font-display font-bold mb-4">Dashboard</h1>
+                        <p className="text-slate-500 dark:text-slate-400 mb-8">
+                            Welcome to your protected workspace.
+                        </p>
+
+                        <div className="bg-white dark:bg-accent-dark rounded-xl border border-slate-200 dark:border-slate-800 p-8 shadow-sm">
+                            <h2 className="text-xl font-semibold mb-2">You are authenticated!</h2>
+                            <p className="text-slate-600 dark:text-slate-400">
+                                This page is protected by the ProtectedRoute component which verifies the presence of a JWT token in localStorage.
+                            </p>
+                        </div>
+                    </main>
                 </div>
-            </header>
-
-            {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 py-8">
-                {/* Summary Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Active Sessions Card */}
-                    <Card className="border border-border hover:shadow-md transition-shadow">
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Active Sessions</CardTitle>
-                                <div className="p-2 rounded-lg bg-primary/10">
-                                    <Clock className="w-5 h-5 text-primary" />
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold text-foreground">{stats?.participantActive ?? 0}</div>
-                            <p className="text-xs text-muted-foreground mt-2">Study sessions in progress</p>
-                        </CardContent>
-                    </Card>
-
-                    {/* Expired Sessions Card */}
-                    <Card className="border border-border hover:shadow-md transition-shadow">
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Expired Sessions</CardTitle>
-                                <div className="p-2 rounded-lg bg-accent/10">
-                                    <BookOpen className="w-5 h-5 text-accent" />
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold text-foreground">{stats?.participantExpired ?? 0}</div>
-                            <p className="text-xs text-muted-foreground mt-2">Completed study sessions</p>
-                        </CardContent>
-                    </Card>
-
-                    {/* Files Uploaded Card */}
-                    <Card className="border border-border hover:shadow-md transition-shadow">
-                        <CardHeader className="pb-3">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Files Uploaded</CardTitle>
-                                <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900">
-                                    <FileUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-3xl font-bold text-foreground">{stats?.uploadedFiles ?? 0}</div>
-                            <p className="text-xs text-muted-foreground mt-2">Study materials shared</p>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Recent Activity Section */}
-                <div className="mt-8">
-                    <Card className="border border-border">
-                        <CardHeader>
-                            <CardTitle className="text-lg">Quick Stats</CardTitle>
-                            <CardDescription>Your studying overview</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between py-2">
-                                    <span className="text-sm text-foreground">Total Sessions</span>
-                                    <span className="font-semibold text-primary">{totalSessions}</span>
-                                </div>
-                                <div className="h-px bg-border"></div>
-                                <div className="flex items-center justify-between py-2">
-                                    <span className="text-sm text-foreground">Sessions Hosted</span>
-                                    <span className="font-semibold text-primary">{stats?.hostedSessions ?? 0}</span>
-                                </div>
-                                <div className="h-px bg-border"></div>
-                                <div className="flex items-center justify-between py-2">
-                                    <span className="text-sm text-foreground">Sessions Joined</span>
-                                    <span className="font-semibold text-primary">{sessionsJoined}</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </main>
-        </div>
-    )
+            </div>
+        </ProtectedRoute>
+    );
 }
