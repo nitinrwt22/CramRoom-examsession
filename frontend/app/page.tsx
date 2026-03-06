@@ -1,13 +1,19 @@
-import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
+import { Navbar } from "@/components/layout/Navbar";
+import { Footer } from "@/components/layout/Footer";
+import { Hero } from "@/components/sections/Hero";
+import { Workflow } from "@/components/sections/Workflow";
+import { Reviews } from "@/components/sections/Reviews";
 
-export default async function Home() {
-  const cookieStore = await cookies();
-  const token = cookieStore.get("token");
-
-  if (token) {
-    redirect("/dashboard");
-  } else {
-    redirect("/login");
-  }
+export default function LandingPage() {
+  return (
+    <div className="min-h-screen flex flex-col font-sans transition-colors duration-300">
+      <Navbar />
+      <main className="flex-1">
+        <Hero />
+        <Workflow />
+        <Reviews />
+      </main>
+      <Footer />
+    </div>
+  );
 }
