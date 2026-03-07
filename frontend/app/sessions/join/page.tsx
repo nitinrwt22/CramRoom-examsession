@@ -54,7 +54,13 @@ export default function JoinSessionPage() {
                 return;
             }
 
-            console.error("Join session error:", err);
+            if (err.response && err.response.status >= 400 && err.response.status < 500) {
+                // It's an expected client error (like 404 Not Found), don't trigger Next.js error overlay
+                console.warn("Join session failed:", err.response.data?.error || err.message);
+            } else {
+                console.error("Join session error:", err);
+            }
+
             const errorMessage = err.response?.data?.error || "Failed to join session. Please check the ID and try again.";
             setError(errorMessage);
         } finally {
