@@ -3,7 +3,6 @@
 import Link from 'next/link';
 import { Moon, Sun } from 'lucide-react';
 import { Logo } from "@/components/ui/Logo";
-import { Button } from '@/components/ui/button';
 import { useTheme } from 'next-themes';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -35,16 +34,16 @@ export function Navbar() {
     };
 
     return (
-        <nav className="sticky top-0 z-50 border-b border-slate-200/60 dark:border-slate-800/60 bg-white/80 dark:bg-black/80 backdrop-blur-md">
-            <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <nav className="sticky top-0 z-50 border-b border-border/20 bg-background/95 backdrop-blur-md px-6 py-4">
+            <div className="max-w-7xl mx-auto flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <Logo className="w-8 h-8" iconSize={20} />
-                    <span className="text-xl font-bold tracking-tight">CramRoom</span>
+                    <span className="text-3xl font-display font-black tracking-tighter uppercase italic">CramRoom</span>
                 </div>
-                <div className="hidden md:flex items-center space-x-8">
-                    <Link className="text-sm font-medium hover:text-primary transition-colors" href="/#features">Features</Link>
-                    <Link className="text-sm font-medium hover:text-primary transition-colors" href="/#workflow">Workflow</Link>
-                    <Link className="text-sm font-medium hover:text-primary transition-colors" href="/#reviews">Reviews</Link>
+                <div className="hidden md:flex gap-8 text-sm font-bold uppercase tracking-widest items-center">
+                    <Link className="hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4" href="/#workflow">How It Works</Link>
+                    <Link className="hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4" href="/#reviews">Reviews</Link>
+                    <Link className="hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4" href="/login">Study Sessions</Link>
                 </div>
                 <div className="flex items-center gap-4">
                     {mounted && (
@@ -60,21 +59,17 @@ export function Navbar() {
                     {mounted && (
                         isAuthenticated ? (
                             <>
-                                <Button variant="ghost" asChild className="hidden sm:inline-flex">
-                                    <Link href="/dashboard">Dashboard</Link>
-                                </Button>
-                                <Button className="rounded-full px-6" onClick={handleLogout}>
-                                    Logout
-                                </Button>
+                                <Link className="text-sm font-bold uppercase tracking-widest hover:text-primary hidden sm:inline-flex" href="/dashboard">Dashboard</Link>
+                                <button className="ink-stamp-border text-primary font-display font-bold text-lg px-4 py-1 hover:bg-primary hover:text-primary-foreground transition-all transform hover:-rotate-1 ml-4" onClick={handleLogout}>
+                                    LOGOUT
+                                </button>
                             </>
                         ) : (
                             <>
-                                <Button variant="ghost" asChild className="hidden sm:inline-flex">
-                                    <Link href="/login">Login</Link>
-                                </Button>
-                                <Button className="rounded-full px-6" asChild>
-                                    <Link href="/register">Register</Link>
-                                </Button>
+                                <Link className="text-sm font-bold uppercase tracking-widest hover:text-primary hidden sm:inline-flex" href="/login">Login</Link>
+                                <Link className="ink-stamp-border text-primary font-display font-bold text-lg px-4 py-1 hover:bg-primary hover:text-primary-foreground transition-all transform hover:-rotate-1 ml-4" href="/register">
+                                    REGISTER
+                                </Link>
                             </>
                         )
                     )}

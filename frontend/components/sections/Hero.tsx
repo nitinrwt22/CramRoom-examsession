@@ -1,55 +1,79 @@
 import Link from 'next/link';
-import { ArrowRight, PlayCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 export function Hero() {
     return (
-        <header className="relative overflow-hidden pt-24 pb-32 md:pt-32 md:pb-48">
-            <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(99,102,241,0.05)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.05)_1px,transparent_1px)] dark:bg-[linear-gradient(to_right,rgba(99,102,241,0.1)_1px,transparent_1px),linear-gradient(to_bottom,rgba(99,102,241,0.1)_1px,transparent_1px)] bg-[size:40px_40px] pointer-events-none"></div>
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-full bg-[radial-gradient(circle_at_50%_50%,rgba(99,102,241,0.1)_0%,transparent_70%)] pointer-events-none"></div>
-
-            <div className="max-w-7xl mx-auto px-6 relative text-center">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-100 dark:border-indigo-800 mb-8">
-                    <span className="flex h-2 w-2 rounded-full bg-primary animate-pulse"></span>
-                    <span className="text-xs font-bold text-primary tracking-wider uppercase">Beta v2.0 is now live</span>
-                </div>
-
-                <h1 className="font-display text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight max-w-4xl mx-auto mb-8 leading-[1.1]">
-                    Your AI Brain, <br />
-                    <span className="text-primary italic">Organized</span> by Sessions
+        <header className="relative pt-16 pb-24 px-6" data-purpose="hero-section">
+            <div className="max-w-5xl mx-auto text-center relative z-10">
+                <h1 className="font-display text-6xl md:text-8xl font-black mb-6 leading-none tracking-tight">
+                    Crack Your Exams <br />
+                    <span className="brushstroke-text italic">Intelligently</span>
                 </h1>
 
-                <p className="max-w-2xl mx-auto text-lg md:text-xl text-slate-600 dark:text-slate-400 mb-12 leading-relaxed">
-                    CramRoom turns chaotic AI chats into structured workspaces with persistent memory and automated insights. Work faster, remember more.
+                <p className="max-w-2xl mx-auto text-xl font-mono mb-12 leading-relaxed opacity-90">
+                    CramRoom is the AI study partner built for serious students. Join live exam sessions, get real-time hints, track your weak topics, and walk into every exam ready.
                 </p>
 
-                <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                    <Button size="lg" className="w-full sm:w-auto px-8 py-6 rounded-xl text-md font-bold hover:scale-105 transition-all shadow-xl shadow-indigo-500/20" asChild>
+                <div className="flex flex-col sm:flex-row justify-center gap-4 mb-20">
+                    <Button className="bg-primary text-primary-foreground font-display text-2xl h-auto px-10 py-4 rounded-none transform -rotate-1 shadow-[4px_4px_0px_0px_rgba(26,26,27,1)] dark:shadow-[4px_4px_0px_0px_rgba(255,255,255,0.2)] hover:shadow-none hover:translate-x-1 hover:translate-y-1 transition-all" asChild>
                         <Link href="/register">
-                            Get Started Free <ArrowRight className="w-5 h-5 ml-2" />
+                            START STUDYING
                         </Link>
                     </Button>
-                    <Button size="lg" variant="outline" className="w-full sm:w-auto px-8 py-6 rounded-xl text-md font-bold" asChild>
+                    <Button variant="outline" className="border-2 border-border text-foreground font-display text-2xl h-auto px-10 py-4 rounded-none transform rotate-1 hover:bg-foreground hover:text-background transition-all" asChild>
                         <Link href="#workflow">
-                            Learn More
+                            SEE HOW IT WORKS
                         </Link>
                     </Button>
                 </div>
 
-                <div className="mt-20 relative max-w-5xl mx-auto">
-                    <div className="relative rounded-2xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-2xl">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                            alt="Code and terminal interface"
-                            className="w-full grayscale dark:grayscale-0 opacity-80 dark:opacity-60 object-cover"
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuC9PY2IUU5skV15x8t9icdN4gUC8iOqfX9bbItnxVhd9JolNgEd6Ce58Yqj01xtg1SA2kwc3H5sHQMoVnLL_etnRwqDs-twDBeX8t4UkUfsJzAYieS9AxjQtbyy6uMGjFNu5GwmqiC-sRDI8e5prP_JEw27fU1rsuWMEFXTPE5vJLphSSAMSsZlOexS07J1e_w8voRwHg_gDpIT3LfPwA3x3tVup1hvYuM6IdWZa2baoE_fbnbKTRWtojA7RtmpOjb8mcDQNKjeGtQf"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-background dark:from-background via-transparent to-transparent"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="bg-white/10 dark:bg-black/40 backdrop-blur-md p-8 rounded-full border border-white/20 hover:scale-110 transition-transform cursor-pointer">
-                                <PlayCircle className="w-16 h-16 text-primary" />
+                <div className="relative max-w-4xl mx-auto mt-12" data-purpose="hero-demo">
+                    <div className="torn-notebook p-8 text-left min-h-[400px] border border-border/10">
+                        <div className="flex justify-between items-start mb-8 border-b border-dashed border-border/20 pb-4">
+                            <div>
+                                <h3 className="font-display text-2xl uppercase font-black">Active Session: CS-301 Final Prep</h3>
+                                <p className="text-xs font-mono opacity-60 italic">Session ID: #4421 | Host: Nitin R. | {new Date().toLocaleDateString()} | Status: Live</p>
+                            </div>
+                            <div className="bg-primary/10 text-primary px-3 py-1 font-mono text-xs font-bold border border-primary/40 rotate-2">
+                                LIVE
                             </div>
                         </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-4 h-4 border-2 border-primary bg-primary/20"></div>
+                                    <span className="font-bold underline decoration-primary">Revise: Dijkstra&apos;s Algorithm</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-4 h-4 border border-border"></div>
+                                    <span>Practice: Dynamic Programming patterns</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                    <div className="w-4 h-4 border border-border"></div>
+                                    <span className="line-through opacity-50">Mock Test: Data Structures MCQs</span>
+                                </div>
+                                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-border/20">
+                                    <span className="text-xs font-mono opacity-60">AI Insight:</span>
+                                    <span className="text-xs font-mono text-primary font-bold">Weak on graph traversal — review BFS/DFS</span>
+                                </div>
+                            </div>
+                            
+                            <div className="bg-background p-4 border border-border/5 transform rotate-1 shadow-sm">
+                                <p className="text-sm italic leading-relaxed">
+                                    &quot;Session analysis complete. You answered 7/10 on Sorting correctly. AI recommends 20 min on Heap Sort before tomorrow&apos;s paper.&quot;
+                                </p>
+                                <p className="text-right mt-2 font-bold">— CramRoom AI</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="absolute -bottom-10 -right-6 transform rotate-12 opacity-80 pointer-events-none">
+                        <svg height="120" viewBox="0 0 100 100" width="120">
+                            <circle cx="50" cy="50" fill="none" r="45" stroke="var(--color-pulp-red)" strokeDasharray="2,2" strokeWidth="2"></circle>
+                            <text fill="var(--color-pulp-red)" fontFamily="Playfair Display" fontSize="12" fontWeight="bold" textAnchor="middle" x="50" y="45">EXAM READY</text>
+                            <text fill="var(--color-pulp-red)" fontFamily="Courier Prime" fontSize="8" textAnchor="middle" x="50" y="65">CRAMROOM AI™</text>
+                        </svg>
                     </div>
                 </div>
             </div>

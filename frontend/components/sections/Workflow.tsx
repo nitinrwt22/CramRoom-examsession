@@ -1,63 +1,60 @@
-import { Zap, MessageSquare, Network, LineChart } from 'lucide-react';
+import { BookOpen, Brain, Users, TrendingUp } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 
 export function Workflow() {
     const steps = [
         {
             id: '01',
-            title: 'Start Session',
-            description: 'Initialize a new context-aware session dedicated to a specific project or topic.',
-            icon: Zap
+            title: 'Open a Session',
+            description: 'Create or join a focused exam prep session for any subject — from CS fundamentals to UPSC strategy.',
+            icon: BookOpen
         },
         {
             id: '02',
-            title: 'Chat with AI',
-            description: 'Interact with high-performance LLMs that have full access to your session\'s memory.',
-            icon: MessageSquare
+            title: 'Study with AI',
+            description: 'Get real-time AI hints, explanations, and topic deep-dives, all scoped to your current session context.',
+            icon: Brain
         },
         {
             id: '03',
-            title: 'Auto-Organize',
-            description: 'CramRoom automatically tags and categorizes key insights and files as you go.',
-            icon: Network
+            title: 'Collaborate',
+            description: 'Study with peers in shared sessions. The host controls the flow; everyone benefits from the AI.',
+            icon: Users
         },
         {
             id: '04',
-            title: 'Get Insights',
-            description: 'Review structured summaries and visual maps of your entire thought process.',
-            icon: LineChart
+            title: 'Track Progress',
+            description: 'AI identifies your weakest topics from every session and builds a personalized revision plan automatically.',
+            icon: TrendingUp
         }
     ];
 
     return (
-        <section className="py-24 bg-slate-50 dark:bg-zinc-950/50" id="workflow">
-            <div className="max-w-7xl mx-auto px-6">
-                <div className="text-center mb-16">
-                    <h2 className="text-3xl md:text-4xl font-display font-bold mb-4">How it works</h2>
-                    <p className="text-slate-600 dark:text-slate-400">Streamline your cognitive workflow in four simple steps.</p>
-                </div>
+        <>
+        <hr className="rough-divider mx-auto max-w-7xl" />
+        <section className="py-20 px-6 bg-foreground/5" id="workflow" data-purpose="features">
+            <div className="max-w-7xl mx-auto">
+                <h2 className="font-display text-4xl md:text-5xl font-black mb-16 text-center underline decoration-primary decoration-4 underline-offset-8 uppercase">
+                    How CramRoom Works
+                </h2>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
                     {steps.map((step) => (
-                        <Card key={step.id} className="group border-slate-200 dark:border-slate-800 hover:border-primary/50 transition-all duration-300 bg-white dark:bg-zinc-900 overflow-hidden">
-                            <CardContent className="p-8">
-                                <div className="mb-6 flex flex-col gap-4">
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Step {step.id}</span>
-                                        <div className="bg-primary/10 p-2 rounded-lg text-primary">
-                                            <step.icon className="w-6 h-6" />
-                                        </div>
-                                    </div>
-                                    <h3 className="text-xl font-bold">{step.title}</h3>
-                                    <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                                        {step.description}
-                                    </p>
+                        <Card key={step.id} className="group border-none shadow-none bg-transparent hover:bg-transparent text-center transition-all duration-300">
+                            <CardContent className="p-0">
+                                <div className="mb-6 inline-block transform transition-transform group-hover:scale-110">
+                                    <step.icon className="w-16 h-16 stroke-1 text-foreground" />
                                 </div>
+                                <h4 className="font-display text-xl font-bold mb-3 uppercase">{step.title}</h4>
+                                <p className="text-sm font-mono leading-relaxed opacity-80">
+                                    {step.description}
+                                </p>
                             </CardContent>
                         </Card>
                     ))}
                 </div>
             </div>
         </section>
+        </>
     );
 }
