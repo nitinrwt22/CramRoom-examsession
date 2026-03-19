@@ -5,7 +5,12 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
-import { Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, TrendingDown, TrendingUp, Minus } from 'lucide-react'
+import { 
+    Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
+    TrendingDown, TrendingUp, Minus, Upload, RefreshCw, AlertTriangle, 
+    Zap, Link2, BookOpen, BarChart2, Folder, MessageSquare, Settings, 
+    UserPlus, Users, ChevronRight, CornerDownRight 
+} from 'lucide-react'
 import api from '@/lib/axios'
 
 interface SessionFile {
@@ -40,7 +45,6 @@ interface AIMessage {
     createdAt: string
     confidence?: number
 }
-
 
 interface ProgressItem {
     topic: string
@@ -78,7 +82,6 @@ export default function SessionDetailPage() {
     const historyEndRef = useRef<HTMLDivElement>(null)
 
     const scrollToBottom = () => {
-        // Wait for DOM to finish rendering messages before scrolling
         setTimeout(() => {
             historyEndRef.current?.scrollIntoView({ behavior: 'auto' })
         }, 100)
@@ -112,7 +115,6 @@ export default function SessionDetailPage() {
             setAiHistory(response.data)
         } catch (err) {
             console.error('Error fetching AI history:', err)
-            // Don't show critical error for this, just log it
         } finally {
             setHistoryLoading(false)
         }
@@ -146,26 +148,17 @@ export default function SessionDetailPage() {
     useEffect(() => {
         const fetchData = async () => {
             try {
-                // Validate ID format before making request
                 if (!params.id || isNaN(parseInt(params.id))) {
                     setError('Invalid session ID')
                     return
                 }
 
-                // Fetch session details
                 const sessionResponse = await api.get(`/session/${params.id}`)
                 setSession(sessionResponse.data)
 
-                // Fetch session files
                 await fetchFiles()
-
-                // Fetch AI history
                 await fetchAIHistory()
-
-                // Fetch weak topics
                 await fetchWeakTopics()
-
-                // Fetch progress
                 await fetchProgress()
             } catch (err) {
                 console.error('Error fetching session:', err)
@@ -184,17 +177,12 @@ export default function SessionDetailPage() {
 
     const handleUploadFile = async (file: File) => {
         if (!session || session.status === 'expired') return
-
         const formData = new FormData()
         formData.append('file', file)
-
         try {
             await api.post(`/session/${params.id}/files`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
+                headers: { 'Content-Type': 'multipart/form-data' },
             })
-            // Refresh file list
             await fetchFiles()
             setIsUploadModalOpen(false)
         } catch (error) {
@@ -208,14 +196,12 @@ export default function SessionDetailPage() {
             const response = await api.get(`/session/files/${fileId}/download`, {
                 responseType: 'blob',
             })
-
             const url = window.URL.createObjectURL(new Blob([response.data]))
             const link = document.createElement('a')
             link.href = url
             link.setAttribute('download', fileName)
             document.body.appendChild(link)
             link.click()
-
             link.parentNode?.removeChild(link)
             window.URL.revokeObjectURL(url)
         } catch (error) {
@@ -230,7 +216,7 @@ export default function SessionDetailPage() {
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString)
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     }
 
     const formatTime = (dateString: string) => {
@@ -240,7 +226,6 @@ export default function SessionDetailPage() {
 
     const handleLeaveSession = async () => {
         if (!confirm("Are you sure you want to leave this session?")) return;
-
         setLeaving(true);
         try {
             await api.post('/session/leave', { sessionId: parseInt(params.id) });
@@ -250,85 +235,23 @@ export default function SessionDetailPage() {
             alert('Failed to leave session. Please try again.');
             setLeaving(false);
         }
-    };
-
-    const handleRevisionPlan = async () => {
-        if (aiLoading) return
-
-        setAiLoading(true)
-        setAiError(null)
-
-        try {
-            const response = await api.post(`/api/sessions/${params.id}/ai/query`, {
-                intent: 'revision_guidance',
-                question: 'Generate Revision Plan' // Backend requires a non-empty question
-            })
-
-            const newMessage: AIMessage = {
-                question: "Get Revision Plan",
-                answer: response.data.answer,
-                confidence: response.data.confidence,
-                createdAt: new Date().toISOString()
-            }
-
-            setAiHistory(prev => [...prev, newMessage])
-        } catch (err) {
-            console.error('Error getting revision plan:', err)
-            const axiosErr = err as { response?: { data?: { message?: string } } }
-            setAiError(axiosErr.response?.data?.message || 'Failed to get revision plan')
-        } finally {
-            setAiLoading(false)
-        }
-    }
-
-    const handleSessionSummary = async () => {
-        if (aiLoading) return
-
-        setAiLoading(true)
-        setAiError(null)
-
-        try {
-            const response = await api.post(`/api/sessions/${params.id}/ai/query`, {
-                intent: 'session_summary',
-                question: '' // Backend intent handles generic summary
-            })
-
-            const newMessage: AIMessage = {
-                question: "Generate Session Summary",
-                answer: response.data.answer,
-                confidence: response.data.confidence,
-                createdAt: new Date().toISOString()
-            }
-
-            setAiHistory(prev => [...prev, newMessage])
-        } catch (err) {
-            console.error('Error generating session summary:', err)
-            const axiosErr = err as { response?: { data?: { message?: string } } }
-            setAiError(axiosErr.response?.data?.message || 'Failed to generate session summary')
-        } finally {
-            setAiLoading(false)
-        }
     }
 
     const handleAskAI = async () => {
         if (!question.trim()) return
-
         setAiLoading(true)
         setAiError(null)
-
         try {
             const response = await api.post(`/api/sessions/${params.id}/ai/query`, {
                 intent: 'concept_clarification',
                 question: question
             })
-
             const newMessage: AIMessage = {
                 question: question,
                 answer: response.data.answer,
                 confidence: response.data.confidence,
                 createdAt: new Date().toISOString()
             }
-
             setAiHistory(prev => [...prev, newMessage])
             setQuestion('')
         } catch (err) {
@@ -340,37 +263,41 @@ export default function SessionDetailPage() {
         }
     }
 
-    const renderTrend = (trend: string) => {
+    // Helper to calculate days left
+    const getDaysLeft = (dateString: string) => {
+        const examTime = new Date(dateString).getTime()
+        const now = new Date().getTime()
+        const diffDays = Math.ceil((examTime - now) / (1000 * 60 * 60 * 24))
+        if (diffDays < 0) return 'Passed'
+        if (diffDays === 0) return 'Today'
+        return `${diffDays} days left`
+    }
+
+    const renderTrendIcon = (trend: string) => {
         switch (trend) {
-            case 'improving':
-                return <span className="text-green-400 flex items-center gap-1 text-xs"><TrendingDown className="w-3 h-3" /> Improving</span>
-            case 'worsening':
-                return <span className="text-red-400 flex items-center gap-1 text-xs"><TrendingUp className="w-3 h-3" /> Worsening</span>
-            case 'stable':
-                return <span className="text-yellow-400 flex items-center gap-1 text-xs"><Minus className="w-3 h-3" /> Stable</span>
-            case 'insufficient_data':
-            default:
-                return <span className="text-gray-400 text-xs">Insufficient Data</span>
+            case 'improving': return <TrendingUp className="w-3 h-3 text-green-500" />
+            case 'worsening': return <TrendingDown className="w-3 h-3 text-red-500" />
+            default: return <Minus className="w-3 h-3 text-gray-400" />
         }
     }
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-white" />
+            <div className="min-h-screen bg-gray-50 dark:bg-[#111111] flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-600 dark:text-blue-500" />
             </div>
         )
     }
 
     if (error || !session) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black flex items-center justify-center text-white">
-                <Card className="w-full max-w-md mx-4 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
+            <div className="min-h-screen bg-gray-50 dark:bg-[#111111] flex items-center justify-center text-gray-900 dark:text-white">
+                <Card className="w-full max-w-md mx-4 bg-white/80 dark:bg-white/5 backdrop-blur-md border border-gray-200 dark:border-white/10 rounded-xl shadow-lg">
                     <CardContent className="pt-6 text-center space-y-4">
-                        <div className="text-red-400 font-medium">
+                        <div className="text-red-500 font-medium">
                             {error || "Session not found"}
                         </div>
-                        <Button onClick={() => router.push('/sessions')} variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-none">
+                        <Button onClick={() => router.push('/sessions')} variant="secondary" className="bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-900 dark:text-white border-none">
                             Back to Sessions
                         </Button>
                     </CardContent>
@@ -379,352 +306,351 @@ export default function SessionDetailPage() {
         )
     }
 
+    const mainTopics = progress.slice(0, 4)
+
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white flex flex-col">
-            {/* Header */}
-            <header className="sticky top-0 z-10 bg-white/5 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 py-4">
-                <div>
-                    <h1 className="text-2xl md:text-3xl font-bold truncate max-w-[200px] md:max-w-md">{session.subject}</h1>
-                    <p className="text-sm text-gray-400 mt-1">
-                        Study session • Exam: {session.exam_date ? formatDate(session.exam_date) : 'TBD'}
-                    </p>
+        <div className="min-h-screen bg-white dark:bg-[#121212] text-gray-900 dark:text-gray-100 flex flex-col font-sans transition-colors duration-300">
+            {/* TOP NAVBAR */}
+            <header className="h-[64px] border-b border-gray-200 dark:border-white/10 flex items-center justify-between px-6 bg-white/80 dark:bg-black/50 backdrop-blur-md shrink-0 z-20">
+                <div className="flex items-center gap-8">
+                    <h1 className="text-xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
+                        <span className="font-extrabold tracking-tight">CramRoom</span> Workspace
+                    </h1>
+                    <nav className="hidden md:flex gap-6 text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <span className="hover:text-amber-600 dark:hover:text-blue-400 cursor-pointer">DASHBOARD</span>
+                        <span className="text-amber-700 dark:text-blue-500 border-b-2 border-amber-600 dark:border-blue-500 pb-[21px] mt-px">LIBRARY</span>
+                        <span className="hover:text-amber-600 dark:hover:text-blue-400 cursor-pointer">SCHEDULE</span>
+                    </nav>
                 </div>
-                <div className="flex items-center gap-4">
+
+                <div className="flex items-center gap-6">
+                    {/* Exam countdown */}
+                    {session.exam_date && (
+                        <div className="hidden sm:flex flex-col items-end">
+                            <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider">Exam Date</span>
+                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                                {formatDate(session.exam_date)} ({getDaysLeft(session.exam_date)})
+                            </span>
+                        </div>
+                    )}
                     <Button
                         variant="destructive"
                         size="sm"
                         onClick={handleLeaveSession}
                         disabled={leaving}
-                        className="gap-2"
+                        className="bg-red-600 hover:bg-red-700 text-white border-transparent font-medium rounded-md px-4"
                     >
-                        {leaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
-                        <span className="hidden sm:inline">{leaving ? 'Leaving...' : 'Leave Session'}</span>
+                        {leaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                        Leave Session
                     </Button>
+                    <Settings className="w-5 h-5 text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer" />
                 </div>
             </header>
 
-            {/* Main Content */}
-            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 max-w-[1600px] mx-auto w-full flex-1">
-                {/* Left Section: AI Chat */}
-                <div className="lg:col-span-2">
-                    {/* AI Assistant Section */}
-                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg flex flex-col h-[calc(100vh-250px)] lg:h-[800px] overflow-hidden">
-                        <CardHeader className="border-b border-white/10 pb-3 bg-white/5">
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <Sparkles className="w-5 h-5 text-blue-400" />
-                                        <CardTitle className="text-lg text-white">AI Session Assistant</CardTitle>
-                                    </div>
-                                    <CardDescription className="text-gray-400">
-                                        Ask questions about shared materials or concepts.
-                                    </CardDescription>
+            {/* MAIN CONTENT AREA */}
+            <div className="flex flex-1 overflow-hidden h-[calc(100vh-64px)]">
+                
+                {/* LEFT SIDEBAR */}
+                <aside className="w-64 border-r border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#161618] shrink-0 hidden lg:flex flex-col justify-between p-4 z-10">
+                    <div className="space-y-6">
+                        {/* Active Session Info */}
+                        <div className="flex items-start gap-3 mb-8 px-2 mt-2">
+                            <div className="bg-blue-600 p-2 rounded-lg text-white">
+                                <BookOpen className="w-5 h-5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-bold truncate text-gray-900 dark:text-white">{session.subject}</h3>
+                                <div className="flex items-center gap-1.5 mt-1">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+                                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase tracking-wider">Active Session</span>
                                 </div>
-                                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                            </div>
+                        </div>
+
+                        {/* Navigation Menu */}
+                        <nav className="space-y-1">
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white text-sm font-medium transition-colors">
+                                <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                                Assistant
+                            </button>
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
+                                <BarChart2 className="w-4 h-4" />
+                                Topics
+                            </button>
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
+                                <TrendingUp className="w-4 h-4" />
+                                Progress
+                            </button>
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
+                                <Folder className="w-4 h-4" />
+                                Files
+                            </button>
+                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
+                                <MessageSquare className="w-4 h-4" />
+                                Live Chat
+                            </button>
+                        </nav>
+                    </div>
+
+                    <div className="space-y-2 mb-2">
+                        <button className="w-full bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-800 dark:text-gray-200 font-semibold text-xs h-10 rounded-lg tracking-wider flex items-center justify-center gap-2 transition-colors">
+                            <UserPlus className="w-4 h-4" />
+                            INVITE PEER
+                        </button>
+                        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors">
+                            <Settings className="w-4 h-4" />
+                            Settings
+                        </button>
+                        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-500/80 hover:text-red-600 dark:hover:text-red-400 text-sm transition-colors opacity-80 hover:opacity-100">
+                            <LogOut className="w-4 h-4" />
+                            Logout
+                        </button>
+                    </div>
+                </aside>
+
+                {/* MIDDLE: AI CHAT */}
+                <main className="flex-1 flex flex-col bg-white dark:bg-[#141416] relative">
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 scroll-smooth pb-32">
+                        {historyLoading ? (
+                            <div className="flex justify-center items-center h-full text-gray-400">
+                                <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                                Loading history...
+                            </div>
+                        ) : aiHistory.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 opacity-60 mt-20">
+                                <Sparkles className="w-12 h-12 mb-4 text-blue-500" />
+                                <p>No questions yet.</p>
+                                <p className="text-sm">Start the conversation by asking about the session.</p>
+                            </div>
+                        ) : (
+                            aiHistory.map((msg, idx) => (
+                                <div key={idx} className="flex flex-col space-y-6 max-w-3xl mx-auto w-full">
+                                    {/* User Question */}
+                                    <div className="flex flex-col items-end pl-12">
+                                        <div className="bg-blue-600 text-white px-5 py-3.5 rounded-2xl rounded-tr-sm shadow-md text-[15px] leading-relaxed relative self-end max-w-[85%]">
+                                            {msg.question}
+                                        </div>
+                                        <span className="text-[10px] text-gray-400 mt-1.5 mr-1 font-medium">{formatTime(msg.createdAt)}</span>
+                                    </div>
+
+                                    {/* AI Answer */}
+                                    <div className="flex flex-col items-start pr-12">
+                                        <div className="flex items-center gap-3 mb-2 ml-1">
+                                            <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white p-1.5 shrink-0 shadow-sm">
+                                                <Sparkles className="w-4 h-4" />
+                                            </div>
+                                            <div>
+                                                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">CramRoom AI</span>
+                                                <span className="text-[10px] text-gray-500 ml-2 font-medium">{formatTime(msg.createdAt)}</span>
+                                            </div>
+                                        </div>
+                                        <div className="bg-gray-100 dark:bg-[#202022] border border-gray-200/50 dark:border-white/5 text-gray-800 dark:text-gray-200 px-5 py-4 rounded-2xl rounded-tl-sm shadow-sm text-[15px] leading-relaxed whitespace-pre-wrap ml-11 max-w-[90%]">
+                                            {msg.answer}
+                                        </div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+
+                        {aiLoading && (
+                            <div className="flex flex-col items-start max-w-3xl mx-auto w-full pr-12 animate-in fade-in slide-in-from-bottom-2">
+                                <div className="flex items-center gap-3 mb-2 ml-1">
+                                    <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white p-1.5 shrink-0 shadow-sm">
+                                        <Sparkles className="w-4 h-4" />
+                                    </div>
+                                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">CramRoom AI</span>
+                                </div>
+                                <div className="bg-gray-100 dark:bg-[#202022] border border-gray-200/50 dark:border-white/5 text-gray-500 dark:text-gray-400 px-5 py-3.5 rounded-2xl rounded-tl-sm ml-11 flex items-center gap-2">
+                                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                    <span className="text-sm italic">Thinking...</span>
+                                </div>
+                            </div>
+                        )}
+                        <div ref={historyEndRef} className="h-4" />
+                    </div>
+
+                    {/* Chat Input Area */}
+                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-white via-white to-transparent dark:from-[#141416] dark:via-[#141416] dark:to-transparent pt-12">
+                        <div className="max-w-3xl mx-auto">
+                            <div className="relative bg-white dark:bg-[#1A1A1C] border border-gray-300 dark:border-gray-700/50 rounded-xl shadow-lg ring-1 ring-black/5 dark:ring-white/5">
+                                <textarea
+                                    className="w-full min-h-[56px] max-h-[160px] p-4 pr-16 bg-transparent text-gray-900 dark:text-white text-[15px] placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:outline-none resize-y rounded-xl"
+                                    placeholder={`Ask anything about ${session.subject}...`}
+                                    value={question}
+                                    onChange={(e) => setQuestion(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleAskAI();
+                                        }
+                                    }}
+                                    disabled={aiLoading}
+                                />
+                                <div className="absolute right-2.5 bottom-2.5">
                                     <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleSessionSummary}
-                                        disabled={aiLoading}
-                                        className="w-full sm:w-auto border-white/10 hover:bg-white/10 bg-transparent text-white"
+                                        size="icon"
+                                        onClick={handleAskAI}
+                                        disabled={!question.trim() || aiLoading}
+                                        className="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md transition-transform active:scale-95 disabled:opacity-50"
                                     >
-                                        <Sparkles className="w-4 h-4 mr-2" />
-                                        Generate Session Summary
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={handleRevisionPlan}
-                                        disabled={aiLoading}
-                                        className="w-full sm:w-auto border-white/10 hover:bg-white/10 bg-transparent text-white"
-                                    >
-                                        <FileText className="w-4 h-4 mr-2" />
-                                        Get Revision Plan
+                                        {aiLoading ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <Send className="w-4 h-4" />
+                                        )}
                                     </Button>
                                 </div>
                             </div>
-                        </CardHeader>
-
-                        <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
-                            {/* Chat History Area */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
-                                {historyLoading ? (
-                                    <div className="flex justify-center items-center h-48 text-gray-400">
-                                        <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                                        Loading history...
-                                    </div>
-                                ) : aiHistory.length === 0 ? (
-                                    <div className="flex flex-col items-center justify-center h-48 text-center text-gray-400 opacity-60">
-                                        <Sparkles className="w-12 h-12 mb-4" />
-                                        <p>No questions yet.</p>
-                                        <p className="text-sm">Start the conversation by asking about the session.</p>
-                                    </div>
-                                ) : (
-                                    aiHistory.map((msg, idx) => (
-                                        <div key={idx} className="flex flex-col space-y-4">
-                                            {/* User Question */}
-                                            <div className="flex flex-col items-end pl-12">
-                                                <div className="flex items-center gap-2 mb-1 mr-1">
-                                                    <span className="text-[10px] text-gray-400 opacity-70">{formatTime(msg.createdAt)}</span>
-                                                    <span className="text-xs text-gray-400 font-medium">You</span>
-                                                </div>
-                                                <div className="bg-blue-600/20 border border-blue-500/30 px-4 py-3 rounded-2xl rounded-tr-none text-white shadow-sm">
-                                                    <p className="text-sm leading-relaxed">{msg.question}</p>
-                                                </div>
-                                            </div>
-
-                                            {/* AI Answer */}
-                                            <div className="flex flex-col items-start pr-12">
-                                                <div className="flex items-center gap-2 mb-1 ml-1">
-                                                    <span className="text-xs text-gray-400 font-medium">CramRoom AI</span>
-                                                    <span className="text-[10px] text-gray-400 opacity-70">{formatTime(msg.createdAt)}</span>
-                                                </div>
-                                                <div className="bg-white/10 border border-white/10 text-white px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
-                                                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.answer}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))
-                                )}
-
-                                {/* Loading State Bubble */}
-                                {aiLoading && (
-                                    <div className="flex flex-col items-start pr-12 animate-in fade-in slide-in-from-bottom-2">
-                                        <span className="text-xs text-gray-400 mb-1 ml-1">CramRoom AI</span>
-                                        <div className="bg-white/10 border border-white/10 text-white px-4 py-3 rounded-2xl rounded-tl-none inline-block">
-                                            <div className="flex items-center gap-2">
-                                                <Loader2 className="w-4 h-4 animate-spin" />
-                                                <span className="text-sm">Thinking...</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-                                <div ref={historyEndRef} />
-                            </div>
-
-                            {/* Input Area */}
-                            <div className="p-4 bg-white/5 border-t border-white/10 mt-auto">
-                                <div className="relative">
-                                    <textarea
-                                        className="w-full min-h-[50px] max-h-[150px] p-3 pr-24 rounded-lg border border-white/20 bg-black/20 text-white text-sm ring-offset-background placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-                                        placeholder="Ask a question..."
-                                        value={question}
-                                        onChange={(e) => setQuestion(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter' && !e.shiftKey) {
-                                                e.preventDefault();
-                                                handleAskAI();
-                                            }
-                                        }}
-                                        disabled={aiLoading}
-                                    />
-                                    <div className="absolute right-2 bottom-2">
-                                        <Button
-                                            size="sm"
-                                            onClick={handleAskAI}
-                                            disabled={!question.trim() || aiLoading}
-                                            className="h-8 bg-blue-600 hover:bg-blue-700 text-white border-transparent"
-                                        >
-                                            {aiLoading ? (
-                                                <>
-                                                    <Loader2 className="w-3 h-3 animate-spin mr-2" />
-                                                    Thinking...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    Ask AI <Send className="w-3 h-3 ml-2" />
-                                                </>
-                                            )}
-                                        </Button>
-                                    </div>
-                                </div>
-                                {aiError && (
-                                    <p className="text-xs text-red-500 mt-2 ml-1">{aiError}</p>
-                                )}
-                                <p className="text-[10px] text-gray-500 mt-2 text-center">
-                                    AI responses are generated based on uploaded session materials.
+                            {aiError && (
+                                <p className="text-xs text-red-500 mt-2 ml-2 font-medium flex items-center gap-1">
+                                    <AlertTriangle className="w-3 h-3" /> {aiError}
                                 </p>
+                            )}
+                            <div className="flex items-center gap-4 mt-3 ml-2 text-xs text-gray-500 dark:text-gray-500 font-medium">
+                                <button className="flex items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                    <Link2 className="w-3.5 h-3.5" /> Attach Note
+                                </button>
+                                <button className="flex items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                    <Zap className="w-3.5 h-3.5" /> Voice Query
+                                </button>
                             </div>
-                        </CardContent>
-                    </Card>
-                </div>
+                        </div>
+                    </div>
+                </main>
 
-                {/* Right Section: Panels */}
-                <div className="lg:col-span-1 flex flex-col gap-6">
-                    {/* Weak Topics Section */}
-                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
-                        <CardHeader className="pb-4 border-b border-white/10 bg-white/5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-lg text-white">Weak Topics Detected</CardTitle>
-                                    <CardDescription className="text-gray-400">Areas that may need more review</CardDescription>
-                                </div>
-                                <Button
-                                    onClick={fetchWeakTopics}
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={weakTopicsLoading}
-                                    className="gap-2 border-white/10 hover:bg-white/10 bg-transparent text-white"
-                                >
-                                    <Loader2 className={`w-4 h-4 ${weakTopicsLoading ? 'animate-spin' : ''}`} />
-                                    <span className="hidden sm:inline">Refresh</span>
-                                </Button>
+                {/* RIGHT SIDEBAR */}
+                <aside className="w-80 lg:w-[360px] border-l border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#161618] shrink-0 overflow-y-auto p-5 xl:p-6 space-y-6 z-10 hidden md:block">
+                    
+                    {/* Weak Topics */}
+                    <Card className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
+                        <CardHeader className="p-4 pb-3 flex flex-row items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <AlertTriangle className="w-4 h-4 text-red-500" />
+                                <CardTitle className="text-[15px] font-bold text-gray-900 dark:text-gray-100">Weak Topics</CardTitle>
                             </div>
+                            <button onClick={fetchWeakTopics} disabled={weakTopicsLoading} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+                                <RefreshCw className={`w-3.5 h-3.5 ${weakTopicsLoading ? 'animate-spin' : ''}`} />
+                            </button>
                         </CardHeader>
-                        <CardContent className="pt-4">
+                        <CardContent className="px-4 pb-5 pt-0">
                             {weakTopicsLoading ? (
-                                <div className="flex justify-center items-center h-24 text-gray-400">
-                                    <Loader2 className="w-6 h-6 animate-spin" />
-                                </div>
+                                <div className="py-4 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
                             ) : weakTopics.length === 0 ? (
-                                <div className="text-center py-6 bg-white/5 rounded-lg border border-dashed border-white/20">
-                                    <p className="text-sm text-gray-400">No significant weak topics detected yet.</p>
-                                </div>
+                                <p className="text-sm text-gray-500">No weak topics detected.</p>
                             ) : (
                                 <div className="flex flex-wrap gap-2">
-                                    {weakTopics.map((topic, index) => (
+                                    {weakTopics.map((topic, index) => {
+                                        // Alternate style to match the screenshot (some red, some grey)
+                                        const isRed = index < 2; 
+                                        return (
                                         <div
                                             key={index}
-                                            className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2"
+                                            className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide border ${
+                                                isRed 
+                                                ? 'bg-red-50 dark:bg-[#2A171C] text-red-700 dark:text-[#D45B5B] border-red-200 dark:border-transparent' 
+                                                : 'bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-400 border-gray-200 dark:border-transparent'
+                                            }`}
                                         >
-                                            <span>{topic.topic}</span>
-                                            <span className="opacity-70 text-xs bg-red-500/20 px-1.5 py-0.5 rounded-md">{topic.frequency}</span>
+                                            {topic.topic}
                                         </div>
-                                    ))}
+                                    )})}
                                 </div>
                             )}
                         </CardContent>
                     </Card>
 
-                    {/* Topic Progress Section */}
-                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
-                        <CardHeader className="pb-4 border-b border-white/10 bg-white/5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-lg text-white">Topic Progress</CardTitle>
-                                    <CardDescription className="text-gray-400">Track your weak area improvements</CardDescription>
-                                </div>
-                                <Button
-                                    onClick={fetchProgress}
-                                    variant="outline"
-                                    size="sm"
-                                    disabled={progressLoading}
-                                    className="gap-2 border-white/10 hover:bg-white/10 bg-transparent text-white"
-                                >
-                                    <Loader2 className={`w-4 h-4 ${progressLoading ? 'animate-spin' : ''}`} />
-                                    <span className="hidden sm:inline">Refresh</span>
-                                </Button>
+                    {/* Concept Mastery (Progress) */}
+                    <div>
+                        <div className="flex items-center justify-between mb-3 px-1">
+                            <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest">Concept Mastery</h3>
+                            <button onClick={fetchProgress} className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline">
+                                Live Updates
+                            </button>
+                        </div>
+                        {progressLoading ? (
+                            <div className="py-8 flex justify-center"><Loader2 className="w-5 h-5 animate-spin text-gray-400" /></div>
+                        ) : mainTopics.length === 0 ? (
+                            <div className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 p-4 rounded-xl text-center text-sm text-gray-500">
+                                No progress tracked yet.
                             </div>
-                        </CardHeader>
-                        <CardContent className="pt-4">
-                            {progressLoading ? (
-                                <div className="flex justify-center items-center h-24 text-gray-400">
-                                    <Loader2 className="w-6 h-6 animate-spin" />
-                                </div>
-                            ) : progress.length === 0 ? (
-                                <div className="text-center py-6 bg-white/5 rounded-lg border border-dashed border-white/20">
-                                    <p className="text-sm text-gray-400">No progress data available yet.</p>
-                                </div>
-                            ) : (
-                                <div className="flex flex-col gap-3">
-                                    {progress.map((item, index) => (
-                                        <div
-                                            key={index}
-                                            className="bg-white/5 border border-white/10 p-4 rounded-lg flex flex-col gap-2"
-                                        >
-                                            <div className="flex items-start justify-between">
-                                                <span className="font-medium text-white">{item.topic}</span>
-                                                {renderTrend(item.trend)}
+                        ) : (
+                            <div className="grid grid-cols-2 gap-3">
+                                {mainTopics.map((item, idx) => (
+                                    <div key={idx} className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-xl p-3.5 shadow-sm flex flex-col gap-3">
+                                        <div className="flex justify-between items-start">
+                                            <div className="w-8 h-8 rounded-md bg-gray-100 dark:bg-white/5 flex items-center justify-center shrink-0">
+                                                {idx % 2 === 0 ? <BarChart2 className="w-4 h-4 text-blue-500" /> : <Zap className="w-4 h-4 text-amber-500" />}
                                             </div>
-                                            <div className="flex items-center gap-4 text-sm mt-1">
-                                                <div>
-                                                    <span className="text-gray-400 text-xs block mb-0.5">Current</span>
-                                                    <span className="font-bold text-white">{item.currentScore}</span>
-                                                </div>
-                                                {item.previousScore !== undefined && item.previousScore !== null && (
-                                                    <div>
-                                                        <span className="text-gray-400 text-xs block mb-0.5">Previous</span>
-                                                        <span className="text-gray-400">{item.previousScore}</span>
-                                                    </div>
-                                                )}
+                                            <div className="flex items-center gap-1 font-bold text-sm text-gray-900 dark:text-gray-100">
+                                                {item.currentScore}% {renderTrendIcon(item.trend)}
                                             </div>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    {/* Shared Files Section */}
-                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
-                        <CardHeader className="pb-4 border-b border-white/10 bg-white/5">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <CardTitle className="text-lg text-white">Shared Files</CardTitle>
-                                    <CardDescription className="text-gray-400">All study materials</CardDescription>
-                                </div>
-                                <Button onClick={() => setIsUploadModalOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white border-transparent" size="sm">
-                                    <Plus className="w-4 h-4" />
-                                    Upload
-                                </Button>
+                                        <div>
+                                            <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate mb-2" title={item.topic}>{item.topic}</p>
+                                            <div className="h-1 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                                                <div 
+                                                    className={`h-full rounded-full ${idx % 2 === 0 ? 'bg-blue-500' : 'bg-amber-500'}`} 
+                                                    style={{ width: `${item.currentScore}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
                             </div>
+                        )}
+                    </div>
+
+                    {/* Shared Resources */}
+                    <Card className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
+                        <CardHeader className="p-4 pb-3 flex flex-row items-center justify-between">
+                            <CardTitle className="text-[15px] font-bold text-gray-900 dark:text-gray-100">Shared Resources</CardTitle>
+                            <button onClick={() => setIsUploadModalOpen(true)} className="w-7 h-7 bg-teal-50 dark:bg-teal-900/30 text-teal-600 dark:text-teal-500 rounded flex items-center justify-center hover:bg-teal-100 dark:hover:bg-teal-900/50 transition-colors">
+                                <Upload className="w-3.5 h-3.5" />
+                            </button>
                         </CardHeader>
-                        <CardContent className="pt-4">
+                        <CardContent className="px-3 pb-3 pt-0">
                             {files.length === 0 ? (
-                                <div className="text-center py-8 bg-white/5 rounded-lg border border-dashed border-white/20">
-                                    <FileText className="w-8 h-8 mx-auto text-gray-500 mb-3" />
-                                    <p className="text-sm text-gray-400">No files uploaded yet</p>
-                                </div>
+                                <div className="text-center py-6 text-sm text-gray-500">No resources shared yet.</div>
                             ) : (
-                                <div className="flex flex-col gap-3 overflow-y-auto max-h-[300px] pr-2">
-                                    {files.map((file) => (
-                                        <div key={file.id} className="p-3 bg-white/5 border border-white/10 rounded-lg space-y-2 hover:bg-white/10 transition-colors">
-                                            <div className="flex items-start gap-3">
-                                                <div className="p-2 bg-blue-500/20 rounded text-blue-400 mt-1">
-                                                    <FileText className="w-4 h-4" />
+                                <div className="space-y-1">
+                                    {files.map(file => (
+                                        <div key={file.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                                            <div className="flex items-center gap-3 overflow-hidden">
+                                                <div className="w-8 h-8 rounded-md bg-gray-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                                                    <FileText className="w-4 h-4 text-gray-500 dark:text-gray-400" />
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium text-white truncate">{file.name}</p>
-                                                    <p className="text-xs text-gray-400 mt-1">By {file.uploadedBy}</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center justify-between pt-2 border-t border-white/10">
-                                                <span className="text-xs text-gray-400">
-                                                    {formatDate(file.uploadDate)} • {file.size}
-                                                </span>
-                                                <div className="flex items-center gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleDownloadFile(file.id, file.name)}
-                                                        className="h-7 w-7 text-gray-400 hover:text-white"
-                                                    >
-                                                        <Download className="w-3.5 h-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        onClick={() => handleDeleteFile(file.id)}
-                                                        className="h-7 w-7 text-gray-400 hover:text-red-400"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </Button>
+                                                <div className="min-w-0">
+                                                    <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
+                                                    <p className="text-[10px] text-gray-500 truncate">Uploaded • {file.size}</p>
                                                 </div>
                                             </div>
+                                            <button 
+                                                onClick={() => handleDownloadFile(file.id, file.name)}
+                                                className="w-7 h-7 rounded flex items-center justify-center text-gray-400 hover:text-gray-900 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-all shrink-0"
+                                            >
+                                                <Download className="w-3.5 h-3.5" />
+                                            </button>
                                         </div>
                                     ))}
                                 </div>
                             )}
                         </CardContent>
                     </Card>
-                </div>
-            </main>
 
-            {/* Bottom Content: Live Chat Placeholder */}
-            <div className="px-6 pb-6 max-w-[1600px] mx-auto w-full">
-                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 text-center text-gray-400 shadow-lg">
-                    💬 Live Session Chat (Coming Soon)
-                </div>
+                    {/* Team Collaboration Placeholder */}
+                    <div className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 p-6 rounded-2xl flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden">
+                        <div className="w-12 h-12 bg-gray-100 dark:bg-white/5 rounded-2xl flex items-center justify-center mb-4 text-gray-500 dark:text-gray-400">
+                            <Users className="w-6 h-6" />
+                        </div>
+                        <h4 className="font-bold text-gray-900 dark:text-white text-[15px] mb-2">Team Collaboration</h4>
+                        <p className="text-xs text-gray-500 mb-5 leading-relaxed">Collaborate with teammates in real-time. (Coming Soon)</p>
+                        <span className="px-3 py-1 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 text-[10px] font-bold uppercase tracking-wider rounded-full flex items-center gap-1.5">
+                            <div className="w-1.5 h-1.5 bg-teal-500 rounded-full"></div>
+                            Early Access
+                        </span>
+                    </div>
+
+                </aside>
             </div>
 
             <FileUploadModal
