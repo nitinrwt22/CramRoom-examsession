@@ -343,34 +343,34 @@ export default function SessionDetailPage() {
     const renderTrend = (trend: string) => {
         switch (trend) {
             case 'improving':
-                return <span className="text-green-500 flex items-center gap-1 text-xs"><TrendingDown className="w-3 h-3" /> Improving</span>
+                return <span className="text-green-400 flex items-center gap-1 text-xs"><TrendingDown className="w-3 h-3" /> Improving</span>
             case 'worsening':
-                return <span className="text-red-500 flex items-center gap-1 text-xs"><TrendingUp className="w-3 h-3" /> Worsening</span>
+                return <span className="text-red-400 flex items-center gap-1 text-xs"><TrendingUp className="w-3 h-3" /> Worsening</span>
             case 'stable':
-                return <span className="text-yellow-500 flex items-center gap-1 text-xs"><Minus className="w-3 h-3" /> Stable</span>
+                return <span className="text-yellow-400 flex items-center gap-1 text-xs"><Minus className="w-3 h-3" /> Stable</span>
             case 'insufficient_data':
             default:
-                return <span className="text-muted-foreground text-xs">Insufficient Data</span>
+                return <span className="text-gray-400 text-xs">Insufficient Data</span>
         }
     }
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black flex items-center justify-center">
+                <Loader2 className="w-8 h-8 animate-spin text-white" />
             </div>
         )
     }
 
     if (error || !session) {
         return (
-            <div className="min-h-screen bg-background flex items-center justify-center">
-                <Card className="w-full max-w-md mx-4">
+            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black flex items-center justify-center text-white">
+                <Card className="w-full max-w-md mx-4 bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
                     <CardContent className="pt-6 text-center space-y-4">
-                        <div className="text-red-500 font-medium">
+                        <div className="text-red-400 font-medium">
                             {error || "Session not found"}
                         </div>
-                        <Button onClick={() => router.push('/sessions')} variant="secondary">
+                        <Button onClick={() => router.push('/sessions')} variant="secondary" className="bg-white/10 hover:bg-white/20 text-white border-none">
                             Back to Sessions
                         </Button>
                     </CardContent>
@@ -380,416 +380,352 @@ export default function SessionDetailPage() {
     }
 
     return (
-        <div className="min-h-screen bg-background">
+        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-950 to-black text-white flex flex-col">
             {/* Header */}
-            <header className="border-b border-border bg-card sticky top-0 z-10 transition-shadow shadow-sm">
-                <div className="max-w-7xl mx-auto px-4 py-4 md:py-6">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-2xl md:text-3xl font-bold text-foreground truncate max-w-[200px] md:max-w-md">{session.subject}</h1>
-                            <p className="text-sm text-muted-foreground mt-1">
-                                Study session • Exam: {session.exam_date ? formatDate(session.exam_date) : 'TBD'}
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                            <Button
-                                variant="destructive"
-                                size="sm"
-                                onClick={handleLeaveSession}
-                                disabled={leaving}
-                                className="gap-2"
-                            >
-                                {leaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
-                                <span className="hidden sm:inline">{leaving ? 'Leaving...' : 'Leave Session'}</span>
-                            </Button>
-                        </div>
-                    </div>
+            <header className="sticky top-0 z-10 bg-white/5 backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 py-4">
+                <div>
+                    <h1 className="text-2xl md:text-3xl font-bold truncate max-w-[200px] md:max-w-md">{session.subject}</h1>
+                    <p className="text-sm text-gray-400 mt-1">
+                        Study session • Exam: {session.exam_date ? formatDate(session.exam_date) : 'TBD'}
+                    </p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={handleLeaveSession}
+                        disabled={leaving}
+                        className="gap-2"
+                    >
+                        {leaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogOut className="w-4 h-4" />}
+                        <span className="hidden sm:inline">{leaving ? 'Leaving...' : 'Leave Session'}</span>
+                    </Button>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-                {/* Shared Files Section */}
-                <Card className="border border-border shadow-sm">
-                    <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-lg">Shared Files</CardTitle>
-                                <CardDescription>All study materials for this session</CardDescription>
-                            </div>
-                            <Button onClick={() => setIsUploadModalOpen(true)} className="gap-2" size="sm">
-                                <Plus className="w-4 h-4" />
-                                Upload File
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {files.length === 0 ? (
-                            <div className="text-center py-12 bg-secondary/10 rounded-lg border border-dashed border-border">
-                                <FileText className="w-12 h-12 mx-auto text-muted-foreground/50 mb-3" />
-                                <p className="text-sm text-muted-foreground">No files uploaded yet</p>
-                            </div>
-                        ) : (
-                            <div className="overflow-hidden rounded-lg border border-border">
-                                {/* Desktop Table View */}
-                                <div className="hidden md:block overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead className="bg-secondary/50 border-b border-border">
-                                            <tr>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    File Name
-                                                </th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Uploaded By
-                                                </th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Date
-                                                </th>
-                                                <th className="px-4 py-3 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Size
-                                                </th>
-                                                <th className="px-4 py-3 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                                    Actions
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-border bg-card">
-                                            {files.map((file) => (
-                                                <tr key={file.id} className="hover:bg-secondary/30 transition-colors">
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="p-2 bg-primary/10 rounded text-primary">
-                                                                <FileText className="w-4 h-4" />
-                                                            </div>
-                                                            <span className="text-sm font-medium text-foreground truncate max-w-[200px]">
-                                                                {file.name}
-                                                            </span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span className="text-sm text-muted-foreground">{file.uploadedBy}</span>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span className="text-sm text-muted-foreground">{formatDate(file.uploadDate)}</span>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span className="text-sm text-muted-foreground font-mono">{file.size}</span>
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleDownloadFile(file.id, file.name)}
-                                                                className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                                                            >
-                                                                <Download className="w-4 h-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={() => handleDeleteFile(file.id)}
-                                                                className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </Button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
+            <main className="grid grid-cols-1 lg:grid-cols-3 gap-6 p-6 max-w-[1600px] mx-auto w-full flex-1">
+                {/* Left Section: AI Chat */}
+                <div className="lg:col-span-2">
+                    {/* AI Assistant Section */}
+                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg flex flex-col h-[calc(100vh-250px)] lg:h-[800px] overflow-hidden">
+                        <CardHeader className="border-b border-white/10 pb-3 bg-white/5">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div>
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <Sparkles className="w-5 h-5 text-blue-400" />
+                                        <CardTitle className="text-lg text-white">AI Session Assistant</CardTitle>
+                                    </div>
+                                    <CardDescription className="text-gray-400">
+                                        Ask questions about shared materials or concepts.
+                                    </CardDescription>
                                 </div>
+                                <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleSessionSummary}
+                                        disabled={aiLoading}
+                                        className="w-full sm:w-auto border-white/10 hover:bg-white/10 bg-transparent text-white"
+                                    >
+                                        <Sparkles className="w-4 h-4 mr-2" />
+                                        Generate Session Summary
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleRevisionPlan}
+                                        disabled={aiLoading}
+                                        className="w-full sm:w-auto border-white/10 hover:bg-white/10 bg-transparent text-white"
+                                    >
+                                        <FileText className="w-4 h-4 mr-2" />
+                                        Get Revision Plan
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardHeader>
 
-                                {/* Mobile Card View */}
-                                <div className="md:hidden divide-y divide-border bg-card">
+                        <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
+                            {/* Chat History Area */}
+                            <div className="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth">
+                                {historyLoading ? (
+                                    <div className="flex justify-center items-center h-48 text-gray-400">
+                                        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                                        Loading history...
+                                    </div>
+                                ) : aiHistory.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-48 text-center text-gray-400 opacity-60">
+                                        <Sparkles className="w-12 h-12 mb-4" />
+                                        <p>No questions yet.</p>
+                                        <p className="text-sm">Start the conversation by asking about the session.</p>
+                                    </div>
+                                ) : (
+                                    aiHistory.map((msg, idx) => (
+                                        <div key={idx} className="flex flex-col space-y-4">
+                                            {/* User Question */}
+                                            <div className="flex flex-col items-end pl-12">
+                                                <div className="flex items-center gap-2 mb-1 mr-1">
+                                                    <span className="text-[10px] text-gray-400 opacity-70">{formatTime(msg.createdAt)}</span>
+                                                    <span className="text-xs text-gray-400 font-medium">You</span>
+                                                </div>
+                                                <div className="bg-blue-600/20 border border-blue-500/30 px-4 py-3 rounded-2xl rounded-tr-none text-white shadow-sm">
+                                                    <p className="text-sm leading-relaxed">{msg.question}</p>
+                                                </div>
+                                            </div>
+
+                                            {/* AI Answer */}
+                                            <div className="flex flex-col items-start pr-12">
+                                                <div className="flex items-center gap-2 mb-1 ml-1">
+                                                    <span className="text-xs text-gray-400 font-medium">CramRoom AI</span>
+                                                    <span className="text-[10px] text-gray-400 opacity-70">{formatTime(msg.createdAt)}</span>
+                                                </div>
+                                                <div className="bg-white/10 border border-white/10 text-white px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
+                                                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.answer}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+
+                                {/* Loading State Bubble */}
+                                {aiLoading && (
+                                    <div className="flex flex-col items-start pr-12 animate-in fade-in slide-in-from-bottom-2">
+                                        <span className="text-xs text-gray-400 mb-1 ml-1">CramRoom AI</span>
+                                        <div className="bg-white/10 border border-white/10 text-white px-4 py-3 rounded-2xl rounded-tl-none inline-block">
+                                            <div className="flex items-center gap-2">
+                                                <Loader2 className="w-4 h-4 animate-spin" />
+                                                <span className="text-sm">Thinking...</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                                <div ref={historyEndRef} />
+                            </div>
+
+                            {/* Input Area */}
+                            <div className="p-4 bg-white/5 border-t border-white/10 mt-auto">
+                                <div className="relative">
+                                    <textarea
+                                        className="w-full min-h-[50px] max-h-[150px] p-3 pr-24 rounded-lg border border-white/20 bg-black/20 text-white text-sm ring-offset-background placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:border-transparent disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                                        placeholder="Ask a question..."
+                                        value={question}
+                                        onChange={(e) => setQuestion(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault();
+                                                handleAskAI();
+                                            }
+                                        }}
+                                        disabled={aiLoading}
+                                    />
+                                    <div className="absolute right-2 bottom-2">
+                                        <Button
+                                            size="sm"
+                                            onClick={handleAskAI}
+                                            disabled={!question.trim() || aiLoading}
+                                            className="h-8 bg-blue-600 hover:bg-blue-700 text-white border-transparent"
+                                        >
+                                            {aiLoading ? (
+                                                <>
+                                                    <Loader2 className="w-3 h-3 animate-spin mr-2" />
+                                                    Thinking...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    Ask AI <Send className="w-3 h-3 ml-2" />
+                                                </>
+                                            )}
+                                        </Button>
+                                    </div>
+                                </div>
+                                {aiError && (
+                                    <p className="text-xs text-red-500 mt-2 ml-1">{aiError}</p>
+                                )}
+                                <p className="text-[10px] text-gray-500 mt-2 text-center">
+                                    AI responses are generated based on uploaded session materials.
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Right Section: Panels */}
+                <div className="lg:col-span-1 flex flex-col gap-6">
+                    {/* Weak Topics Section */}
+                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
+                        <CardHeader className="pb-4 border-b border-white/10 bg-white/5">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg text-white">Weak Topics Detected</CardTitle>
+                                    <CardDescription className="text-gray-400">Areas that may need more review</CardDescription>
+                                </div>
+                                <Button
+                                    onClick={fetchWeakTopics}
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={weakTopicsLoading}
+                                    className="gap-2 border-white/10 hover:bg-white/10 bg-transparent text-white"
+                                >
+                                    <Loader2 className={`w-4 h-4 ${weakTopicsLoading ? 'animate-spin' : ''}`} />
+                                    <span className="hidden sm:inline">Refresh</span>
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-4">
+                            {weakTopicsLoading ? (
+                                <div className="flex justify-center items-center h-24 text-gray-400">
+                                    <Loader2 className="w-6 h-6 animate-spin" />
+                                </div>
+                            ) : weakTopics.length === 0 ? (
+                                <div className="text-center py-6 bg-white/5 rounded-lg border border-dashed border-white/20">
+                                    <p className="text-sm text-gray-400">No significant weak topics detected yet.</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {weakTopics.map((topic, index) => (
+                                        <div
+                                            key={index}
+                                            className="bg-red-500/10 text-red-400 border border-red-500/20 px-3 py-1.5 rounded-lg text-sm font-medium flex items-center gap-2"
+                                        >
+                                            <span>{topic.topic}</span>
+                                            <span className="opacity-70 text-xs bg-red-500/20 px-1.5 py-0.5 rounded-md">{topic.frequency}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Topic Progress Section */}
+                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
+                        <CardHeader className="pb-4 border-b border-white/10 bg-white/5">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg text-white">Topic Progress</CardTitle>
+                                    <CardDescription className="text-gray-400">Track your weak area improvements</CardDescription>
+                                </div>
+                                <Button
+                                    onClick={fetchProgress}
+                                    variant="outline"
+                                    size="sm"
+                                    disabled={progressLoading}
+                                    className="gap-2 border-white/10 hover:bg-white/10 bg-transparent text-white"
+                                >
+                                    <Loader2 className={`w-4 h-4 ${progressLoading ? 'animate-spin' : ''}`} />
+                                    <span className="hidden sm:inline">Refresh</span>
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-4">
+                            {progressLoading ? (
+                                <div className="flex justify-center items-center h-24 text-gray-400">
+                                    <Loader2 className="w-6 h-6 animate-spin" />
+                                </div>
+                            ) : progress.length === 0 ? (
+                                <div className="text-center py-6 bg-white/5 rounded-lg border border-dashed border-white/20">
+                                    <p className="text-sm text-gray-400">No progress data available yet.</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-3">
+                                    {progress.map((item, index) => (
+                                        <div
+                                            key={index}
+                                            className="bg-white/5 border border-white/10 p-4 rounded-lg flex flex-col gap-2"
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <span className="font-medium text-white">{item.topic}</span>
+                                                {renderTrend(item.trend)}
+                                            </div>
+                                            <div className="flex items-center gap-4 text-sm mt-1">
+                                                <div>
+                                                    <span className="text-gray-400 text-xs block mb-0.5">Current</span>
+                                                    <span className="font-bold text-white">{item.currentScore}</span>
+                                                </div>
+                                                {item.previousScore !== undefined && item.previousScore !== null && (
+                                                    <div>
+                                                        <span className="text-gray-400 text-xs block mb-0.5">Previous</span>
+                                                        <span className="text-gray-400">{item.previousScore}</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Shared Files Section */}
+                    <Card className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl shadow-lg">
+                        <CardHeader className="pb-4 border-b border-white/10 bg-white/5">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle className="text-lg text-white">Shared Files</CardTitle>
+                                    <CardDescription className="text-gray-400">All study materials</CardDescription>
+                                </div>
+                                <Button onClick={() => setIsUploadModalOpen(true)} className="gap-2 bg-blue-600 hover:bg-blue-700 text-white border-transparent" size="sm">
+                                    <Plus className="w-4 h-4" />
+                                    Upload
+                                </Button>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="pt-4">
+                            {files.length === 0 ? (
+                                <div className="text-center py-8 bg-white/5 rounded-lg border border-dashed border-white/20">
+                                    <FileText className="w-8 h-8 mx-auto text-gray-500 mb-3" />
+                                    <p className="text-sm text-gray-400">No files uploaded yet</p>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-3 overflow-y-auto max-h-[300px] pr-2">
                                     {files.map((file) => (
-                                        <div key={file.id} className="p-4 space-y-3 hover:bg-secondary/30 transition-colors">
+                                        <div key={file.id} className="p-3 bg-white/5 border border-white/10 rounded-lg space-y-2 hover:bg-white/10 transition-colors">
                                             <div className="flex items-start gap-3">
-                                                <div className="p-2 bg-primary/10 rounded text-primary mt-1">
+                                                <div className="p-2 bg-blue-500/20 rounded text-blue-400 mt-1">
                                                     <FileText className="w-4 h-4" />
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                    <p className="text-sm font-medium text-foreground truncate">{file.name}</p>
-                                                    <p className="text-xs text-muted-foreground mt-1">By {file.uploadedBy}</p>
+                                                    <p className="text-sm font-medium text-white truncate">{file.name}</p>
+                                                    <p className="text-xs text-gray-400 mt-1">By {file.uploadedBy}</p>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center justify-between pt-2">
-                                                <span className="text-xs text-muted-foreground">
+                                            <div className="flex items-center justify-between pt-2 border-t border-white/10">
+                                                <span className="text-xs text-gray-400">
                                                     {formatDate(file.uploadDate)} • {file.size}
                                                 </span>
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-1">
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
                                                         onClick={() => handleDownloadFile(file.id, file.name)}
-                                                        className="h-8 w-8"
+                                                        className="h-7 w-7 text-gray-400 hover:text-white"
                                                     >
-                                                        <Download className="w-4 h-4" />
+                                                        <Download className="w-3.5 h-3.5" />
                                                     </Button>
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
                                                         onClick={() => handleDeleteFile(file.id)}
-                                                        className="h-8 w-8 text-destructive"
+                                                        className="h-7 w-7 text-gray-400 hover:text-red-400"
                                                     >
-                                                        <Trash2 className="w-4 h-4" />
+                                                        <Trash2 className="w-3.5 h-3.5" />
                                                     </Button>
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Weak Topics Section */}
-                <Card className="border border-border shadow-sm">
-                    <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-lg">Weak Topics Detected</CardTitle>
-                                <CardDescription>Areas that may need more review</CardDescription>
-                            </div>
-                            <Button
-                                onClick={fetchWeakTopics}
-                                variant="outline"
-                                size="sm"
-                                disabled={weakTopicsLoading}
-                                className="gap-2"
-                            >
-                                <Loader2 className={`w-4 h-4 ${weakTopicsLoading ? 'animate-spin' : ''}`} />
-                                Refresh Analysis
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {weakTopicsLoading ? (
-                            <div className="flex justify-center items-center h-24 text-muted-foreground">
-                                <Loader2 className="w-6 h-6 animate-spin" />
-                            </div>
-                        ) : weakTopics.length === 0 ? (
-                            <div className="text-center py-6 bg-secondary/10 rounded-lg border border-dashed border-border">
-                                <p className="text-sm text-muted-foreground">No significant weak topics detected yet.</p>
-                            </div>
-                        ) : (
-                            <div className="flex flex-wrap gap-3">
-                                {weakTopics.map((topic, index) => (
-                                    <div
-                                        key={index}
-                                        className="bg-destructive/10 text-destructive border border-destructive/20 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2"
-                                    >
-                                        <span>{topic.topic}</span>
-                                        <span className="opacity-70 text-xs">({topic.frequency} mentions)</span>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Topic Progress Section */}
-                <Card className="border border-border shadow-sm">
-                    <CardHeader className="pb-4">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <CardTitle className="text-lg">Topic Progress</CardTitle>
-                                <CardDescription>Track your weak area improvements</CardDescription>
-                            </div>
-                            <Button
-                                onClick={fetchProgress}
-                                variant="outline"
-                                size="sm"
-                                disabled={progressLoading}
-                                className="gap-2"
-                            >
-                                <Loader2 className={`w-4 h-4 ${progressLoading ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </Button>
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {progressLoading ? (
-                            <div className="flex justify-center items-center h-24 text-muted-foreground">
-                                <Loader2 className="w-6 h-6 animate-spin" />
-                            </div>
-                        ) : progress.length === 0 ? (
-                            <div className="text-center py-6 bg-secondary/10 rounded-lg border border-dashed border-border">
-                                <p className="text-sm text-muted-foreground">No progress data available yet.</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {progress.map((item, index) => (
-                                    <div
-                                        key={index}
-                                        className="bg-card border border-border p-4 rounded-lg shadow-sm flex flex-col gap-2"
-                                    >
-                                        <div className="flex items-start justify-between">
-                                            <span className="font-medium text-foreground">{item.topic}</span>
-                                            {renderTrend(item.trend)}
-                                        </div>
-                                        <div className="flex items-center gap-4 text-sm mt-1">
-                                            <div>
-                                                <span className="text-muted-foreground text-xs block mb-0.5">Current</span>
-                                                <span className="font-bold">{item.currentScore}</span>
-                                            </div>
-                                            {item.previousScore !== undefined && item.previousScore !== null && (
-                                                <div>
-                                                    <span className="text-muted-foreground text-xs block mb-0.5">Previous</span>
-                                                    <span className="text-muted-foreground">{item.previousScore}</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* AI Assistant Section */}
-                <Card className="border border-border shadow-sm flex flex-col">
-                    <CardHeader className="border-b border-border bg-muted/20 pb-3">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                            <div>
-                                <div className="flex items-center gap-2 mb-1">
-                                    <Sparkles className="w-5 h-5 text-primary" />
-                                    <CardTitle className="text-lg">AI Session Assistant</CardTitle>
-                                </div>
-                                <CardDescription>
-                                    Ask questions about shared materials or concepts.
-                                </CardDescription>
-                            </div>
-                            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleSessionSummary}
-                                    disabled={aiLoading}
-                                    className="w-full sm:w-auto"
-                                >
-                                    <Sparkles className="w-4 h-4 mr-2" />
-                                    Generate Session Summary
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={handleRevisionPlan}
-                                    disabled={aiLoading}
-                                    className="w-full sm:w-auto"
-                                >
-                                    <FileText className="w-4 h-4 mr-2" />
-                                    Get Revision Plan
-                                </Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-
-                    <CardContent className="p-0">
-                        {/* Chat History Area */}
-                        <div className="max-h-96 overflow-y-auto p-4 space-y-6 scroll-smooth bg-background">
-                            {historyLoading ? (
-                                <div className="flex justify-center items-center h-48 text-muted-foreground">
-                                    <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                                    Loading history...
-                                </div>
-                            ) : aiHistory.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center h-48 text-center text-muted-foreground opacity-60">
-                                    <Sparkles className="w-12 h-12 mb-4" />
-                                    <p>No questions yet.</p>
-                                    <p className="text-sm">Start the conversation by asking about the session.</p>
-                                </div>
-                            ) : (
-                                aiHistory.map((msg, idx) => (
-                                    <div key={idx} className="flex flex-col space-y-4">
-                                        {/* User Question */}
-                                        <div className="flex flex-col items-end pl-12">
-                                            <div className="flex items-center gap-2 mb-1 mr-1">
-                                                <span className="text-[10px] text-muted-foreground opacity-70">{formatTime(msg.createdAt)}</span>
-                                                <span className="text-xs text-muted-foreground font-medium">You</span>
-                                            </div>
-                                            <div className="bg-blue-50 dark:bg-blue-900/20 px-4 py-3 rounded-2xl rounded-tr-none text-foreground shadow-sm">
-                                                <p className="text-sm leading-relaxed">{msg.question}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* AI Answer */}
-                                        <div className="flex flex-col items-start pr-12">
-                                            <div className="flex items-center gap-2 mb-1 ml-1">
-                                                <span className="text-xs text-muted-foreground font-medium">CramRoom AI</span>
-                                                <span className="text-[10px] text-muted-foreground opacity-70">{formatTime(msg.createdAt)}</span>
-                                            </div>
-                                            <div className="bg-gray-800 text-white px-4 py-3 rounded-2xl rounded-tl-none shadow-sm">
-                                                <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.answer}</p>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
                             )}
-
-                            {/* Loading State Bubble */}
-                            {aiLoading && (
-                                <div className="flex flex-col items-start pr-12 animate-in fade-in slide-in-from-bottom-2">
-                                    <span className="text-xs text-muted-foreground mb-1 ml-1">CramRoom AI</span>
-                                    <div className="bg-gray-800 text-white px-4 py-3 rounded-2xl rounded-tl-none inline-block">
-                                        <div className="flex items-center gap-2">
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                            <span className="text-sm">Thinking...</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
-                            <div ref={historyEndRef} />
-                        </div>
-
-                        {/* Input Area */}
-                        <div className="p-4 bg-background border-t border-border">
-                            <div className="relative">
-                                <textarea
-                                    className="w-full min-h-[50px] max-h-[150px] p-3 pr-24 rounded-lg border border-input bg-background text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
-                                    placeholder="Ask a question..."
-                                    value={question}
-                                    onChange={(e) => setQuestion(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            handleAskAI();
-                                        }
-                                    }}
-                                    disabled={aiLoading}
-                                />
-                                <div className="absolute right-2 bottom-2">
-                                    <Button
-                                        size="sm"
-                                        onClick={handleAskAI}
-                                        disabled={!question.trim() || aiLoading}
-                                        className="h-8"
-                                    >
-                                        {aiLoading ? (
-                                            <>
-                                                <Loader2 className="w-3 h-3 animate-spin mr-2" />
-                                                Thinking...
-                                            </>
-                                        ) : (
-                                            <>
-                                                Ask AI <Send className="w-3 h-3 ml-2" />
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-                            </div>
-                            {aiError && (
-                                <p className="text-xs text-destructive mt-2 ml-1">{aiError}</p>
-                            )}
-                            <p className="text-[10px] text-muted-foreground mt-2 text-center">
-                                AI responses are generated based on uploaded session materials.
-                            </p>
-                        </div>
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                </div>
             </main>
+
+            {/* Bottom Content: Live Chat Placeholder */}
+            <div className="px-6 pb-6 max-w-[1600px] mx-auto w-full">
+                <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-6 text-center text-gray-400 shadow-lg">
+                    💬 Live Session Chat (Coming Soon)
+                </div>
+            </div>
 
             <FileUploadModal
                 isOpen={isUploadModalOpen}
