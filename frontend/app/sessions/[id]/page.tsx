@@ -309,7 +309,7 @@ export default function SessionDetailPage() {
     const mainTopics = progress.slice(0, 4)
 
     return (
-        <div className="min-h-screen bg-white dark:bg-[#121212] text-gray-900 dark:text-gray-100 flex flex-col font-sans transition-colors duration-300">
+        <div className="h-screen overflow-hidden bg-white dark:bg-[#121212] text-gray-900 dark:text-gray-100 flex flex-col font-sans transition-colors duration-300">
             {/* TOP NAVBAR */}
             <header className="h-[64px] border-b border-gray-200 dark:border-white/10 flex items-center justify-between px-6 bg-white/80 dark:bg-black/50 backdrop-blur-md shrink-0 z-20">
                 <div className="flex items-center gap-8">
@@ -409,8 +409,8 @@ export default function SessionDetailPage() {
                 </aside>
 
                 {/* MIDDLE: AI CHAT */}
-                <main className="flex-1 flex flex-col bg-white dark:bg-[#141416] relative">
-                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 scroll-smooth pb-32">
+                <main className="flex-1 flex flex-col bg-white dark:bg-[#141416] min-h-0">
+                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 scroll-smooth pb-6">
                         {historyLoading ? (
                             <div className="flex justify-center items-center h-full text-gray-400">
                                 <Loader2 className="w-6 h-6 animate-spin mr-2" />
@@ -466,11 +466,11 @@ export default function SessionDetailPage() {
                                 </div>
                             </div>
                         )}
-                        <div ref={historyEndRef} className="h-4" />
+                        <div ref={historyEndRef} className="h-12" />
                     </div>
 
                     {/* Chat Input Area */}
-                    <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-6 bg-gradient-to-t from-white via-white to-transparent dark:from-[#141416] dark:via-[#141416] dark:to-transparent pt-12">
+                    <div className="shrink-0 p-4 sm:p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#141416]">
                         <div className="max-w-3xl mx-auto">
                             <div className="relative bg-white dark:bg-[#1A1A1C] border border-gray-300 dark:border-gray-700/50 rounded-xl shadow-lg ring-1 ring-black/5 dark:ring-white/5">
                                 <textarea
