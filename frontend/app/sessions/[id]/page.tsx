@@ -62,6 +62,7 @@ export default function SessionDetailPage() {
     const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
     const [leaving, setLeaving] = useState(false)
+    const [activeView, setActiveView] = useState<'assistant' | 'topics' | 'progress' | 'files' | 'chat'>('assistant')
 
     // AI State
     const [question, setQuestion] = useState('')
@@ -369,26 +370,26 @@ export default function SessionDetailPage() {
 
                         {/* Navigation Menu */}
                         <nav className="space-y-1">
-                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white text-sm font-medium transition-colors">
-                                <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                                Assistant
-                            </button>
-                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
-                                <BarChart2 className="w-4 h-4" />
-                                Topics
-                            </button>
-                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
-                                <TrendingUp className="w-4 h-4" />
-                                Progress
-                            </button>
-                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
-                                <Folder className="w-4 h-4" />
-                                Files
-                            </button>
-                            <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 text-sm font-medium transition-colors">
-                                <MessageSquare className="w-4 h-4" />
-                                Live Chat
-                            </button>
+                            {([
+                                { id: 'assistant', label: 'Assistant', icon: <Sparkles className="w-4 h-4" /> },
+                                { id: 'topics',    label: 'Topics',    icon: <BarChart2 className="w-4 h-4" /> },
+                                { id: 'progress',  label: 'Progress',  icon: <TrendingUp className="w-4 h-4" /> },
+                                { id: 'files',     label: 'Files',     icon: <Folder className="w-4 h-4" /> },
+                                { id: 'chat',      label: 'Live Chat', icon: <MessageSquare className="w-4 h-4" /> },
+                            ] as const).map(({ id, label, icon }) => (
+                                <button
+                                    key={id}
+                                    onClick={() => setActiveView(id)}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                                        activeView === id
+                                            ? 'bg-gray-200 dark:bg-white/10 text-gray-900 dark:text-white'
+                                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5'
+                                    }`}
+                                >
+                                    <span className={activeView === id ? 'text-blue-600 dark:text-blue-400' : ''}>{icon}</span>
+                                    {label}
+                                </button>
+                            ))}
                         </nav>
                     </div>
 
@@ -408,114 +409,281 @@ export default function SessionDetailPage() {
                     </div>
                 </aside>
 
-                {/* MIDDLE: AI CHAT */}
+                {/* MIDDLE: MAIN PANEL */}
                 <main className="flex-1 flex flex-col bg-white dark:bg-[#141416] min-h-0">
-                    <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 scroll-smooth pb-6">
-                        {historyLoading ? (
-                            <div className="flex justify-center items-center h-full text-gray-400">
-                                <Loader2 className="w-6 h-6 animate-spin mr-2" />
-                                Loading history...
-                            </div>
-                        ) : aiHistory.length === 0 ? (
-                            <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 opacity-60 mt-20">
-                                <Sparkles className="w-12 h-12 mb-4 text-blue-500" />
-                                <p>No questions yet.</p>
-                                <p className="text-sm">Start the conversation by asking about the session.</p>
-                            </div>
-                        ) : (
-                            aiHistory.map((msg, idx) => (
-                                <div key={idx} className="flex flex-col space-y-6 max-w-3xl mx-auto w-full">
-                                    {/* User Question */}
-                                    <div className="flex flex-col items-end pl-12">
-                                        <div className="bg-blue-600 text-white px-5 py-3.5 rounded-2xl rounded-tr-sm shadow-md text-[15px] leading-relaxed relative self-end max-w-[85%]">
-                                            {msg.question}
-                                        </div>
-                                        <span className="text-[10px] text-gray-400 mt-1.5 mr-1 font-medium">{formatTime(msg.createdAt)}</span>
-                                    </div>
 
-                                    {/* AI Answer */}
-                                    <div className="flex flex-col items-start pr-12">
+                    {/* ── ASSISTANT VIEW ── */}
+                    {activeView === 'assistant' && (
+                        <>
+                            <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-8 scroll-smooth pb-6">
+                                {historyLoading ? (
+                                    <div className="flex justify-center items-center h-full text-gray-400">
+                                        <Loader2 className="w-6 h-6 animate-spin mr-2" />
+                                        Loading history...
+                                    </div>
+                                ) : aiHistory.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center h-full text-center text-gray-400 opacity-60 mt-20">
+                                        <Sparkles className="w-12 h-12 mb-4 text-blue-500" />
+                                        <p>No questions yet.</p>
+                                        <p className="text-sm">Start the conversation by asking about the session.</p>
+                                    </div>
+                                ) : (
+                                    aiHistory.map((msg, idx) => (
+                                        <div key={idx} className="flex flex-col space-y-6 max-w-3xl mx-auto w-full">
+                                            <div className="flex flex-col items-end pl-12">
+                                                <div className="bg-blue-600 text-white px-5 py-3.5 rounded-2xl rounded-tr-sm shadow-md text-[15px] leading-relaxed relative self-end max-w-[85%]">
+                                                    {msg.question}
+                                                </div>
+                                                <span className="text-[10px] text-gray-400 mt-1.5 mr-1 font-medium">{formatTime(msg.createdAt)}</span>
+                                            </div>
+                                            <div className="flex flex-col items-start pr-12">
+                                                <div className="flex items-center gap-3 mb-2 ml-1">
+                                                    <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white p-1.5 shrink-0 shadow-sm">
+                                                        <Sparkles className="w-4 h-4" />
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-sm font-bold text-gray-900 dark:text-gray-100">CramRoom AI</span>
+                                                        <span className="text-[10px] text-gray-500 ml-2 font-medium">{formatTime(msg.createdAt)}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="bg-gray-100 dark:bg-[#202022] border border-gray-200/50 dark:border-white/5 text-gray-800 dark:text-gray-200 px-5 py-4 rounded-2xl rounded-tl-sm shadow-sm text-[15px] leading-relaxed whitespace-pre-wrap ml-11 max-w-[90%]">
+                                                    {msg.answer}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                                {aiLoading && (
+                                    <div className="flex flex-col items-start max-w-3xl mx-auto w-full pr-12 animate-in fade-in slide-in-from-bottom-2">
                                         <div className="flex items-center gap-3 mb-2 ml-1">
                                             <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white p-1.5 shrink-0 shadow-sm">
                                                 <Sparkles className="w-4 h-4" />
                                             </div>
-                                            <div>
-                                                <span className="text-sm font-bold text-gray-900 dark:text-gray-100">CramRoom AI</span>
-                                                <span className="text-[10px] text-gray-500 ml-2 font-medium">{formatTime(msg.createdAt)}</span>
-                                            </div>
+                                            <span className="text-sm font-bold text-gray-900 dark:text-gray-100">CramRoom AI</span>
                                         </div>
-                                        <div className="bg-gray-100 dark:bg-[#202022] border border-gray-200/50 dark:border-white/5 text-gray-800 dark:text-gray-200 px-5 py-4 rounded-2xl rounded-tl-sm shadow-sm text-[15px] leading-relaxed whitespace-pre-wrap ml-11 max-w-[90%]">
-                                            {msg.answer}
+                                        <div className="bg-gray-100 dark:bg-[#202022] border border-gray-200/50 dark:border-white/5 text-gray-500 dark:text-gray-400 px-5 py-3.5 rounded-2xl rounded-tl-sm ml-11 flex items-center gap-2">
+                                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                            <span className="text-sm italic">Thinking...</span>
                                         </div>
                                     </div>
-                                </div>
-                            ))
-                        )}
-
-                        {aiLoading && (
-                            <div className="flex flex-col items-start max-w-3xl mx-auto w-full pr-12 animate-in fade-in slide-in-from-bottom-2">
-                                <div className="flex items-center gap-3 mb-2 ml-1">
-                                    <div className="w-8 h-8 rounded-full bg-teal-600 flex items-center justify-center text-white p-1.5 shrink-0 shadow-sm">
-                                        <Sparkles className="w-4 h-4" />
+                                )}
+                                <div ref={historyEndRef} className="h-12" />
+                            </div>
+                            {/* Chat Input */}
+                            <div className="shrink-0 p-4 sm:p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#141416]">
+                                <div className="max-w-3xl mx-auto">
+                                    <div className="relative bg-white dark:bg-[#1A1A1C] border border-gray-300 dark:border-gray-700/50 rounded-xl shadow-lg ring-1 ring-black/5 dark:ring-white/5">
+                                        <textarea
+                                            className="w-full min-h-[56px] max-h-[160px] p-4 pr-16 bg-transparent text-gray-900 dark:text-white text-[15px] placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:outline-none resize-y rounded-xl"
+                                            placeholder={`Ask anything about ${session.subject}...`}
+                                            value={question}
+                                            onChange={(e) => setQuestion(e.target.value)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' && !e.shiftKey) {
+                                                    e.preventDefault();
+                                                    handleAskAI();
+                                                }
+                                            }}
+                                            disabled={aiLoading}
+                                        />
+                                        <div className="absolute right-2.5 bottom-2.5">
+                                            <Button
+                                                size="icon"
+                                                onClick={handleAskAI}
+                                                disabled={!question.trim() || aiLoading}
+                                                className="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md transition-transform active:scale-95 disabled:opacity-50"
+                                            >
+                                                {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">CramRoom AI</span>
-                                </div>
-                                <div className="bg-gray-100 dark:bg-[#202022] border border-gray-200/50 dark:border-white/5 text-gray-500 dark:text-gray-400 px-5 py-3.5 rounded-2xl rounded-tl-sm ml-11 flex items-center gap-2">
-                                    <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                                    <span className="text-sm italic">Thinking...</span>
+                                    {aiError && (
+                                        <p className="text-xs text-red-500 mt-2 ml-2 font-medium flex items-center gap-1">
+                                            <AlertTriangle className="w-3 h-3" /> {aiError}
+                                        </p>
+                                    )}
+                                    <div className="flex items-center gap-4 mt-3 ml-2 text-xs text-gray-500 dark:text-gray-500 font-medium">
+                                        <button className="flex items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                            <Link2 className="w-3.5 h-3.5" /> Attach Note
+                                        </button>
+                                        <button className="flex items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                            <Zap className="w-3.5 h-3.5" /> Voice Query
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
-                        )}
-                        <div ref={historyEndRef} className="h-12" />
-                    </div>
+                        </>
+                    )}
 
-                    {/* Chat Input Area */}
-                    <div className="shrink-0 p-4 sm:p-6 border-t border-gray-100 dark:border-white/5 bg-white dark:bg-[#141416]">
-                        <div className="max-w-3xl mx-auto">
-                            <div className="relative bg-white dark:bg-[#1A1A1C] border border-gray-300 dark:border-gray-700/50 rounded-xl shadow-lg ring-1 ring-black/5 dark:ring-white/5">
-                                <textarea
-                                    className="w-full min-h-[56px] max-h-[160px] p-4 pr-16 bg-transparent text-gray-900 dark:text-white text-[15px] placeholder:text-gray-400 dark:placeholder:text-gray-500 focus-visible:outline-none resize-y rounded-xl"
-                                    placeholder={`Ask anything about ${session.subject}...`}
-                                    value={question}
-                                    onChange={(e) => setQuestion(e.target.value)}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter' && !e.shiftKey) {
-                                            e.preventDefault();
-                                            handleAskAI();
-                                        }
-                                    }}
-                                    disabled={aiLoading}
-                                />
-                                <div className="absolute right-2.5 bottom-2.5">
-                                    <Button
-                                        size="icon"
-                                        onClick={handleAskAI}
-                                        disabled={!question.trim() || aiLoading}
-                                        className="h-9 w-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow-md transition-transform active:scale-95 disabled:opacity-50"
-                                    >
-                                        {aiLoading ? (
-                                            <Loader2 className="w-4 h-4 animate-spin" />
-                                        ) : (
-                                            <Send className="w-4 h-4" />
-                                        )}
-                                    </Button>
+                    {/* ── TOPICS VIEW ── */}
+                    {activeView === 'topics' && (
+                        <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                            <div className="max-w-2xl mx-auto">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <AlertTriangle className="w-5 h-5 text-red-500" />
+                                        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Weak Topics</h2>
+                                    </div>
+                                    <button onClick={fetchWeakTopics} disabled={weakTopicsLoading} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                        <RefreshCw className={`w-4 h-4 ${weakTopicsLoading ? 'animate-spin' : ''}`} /> Refresh
+                                    </button>
                                 </div>
-                            </div>
-                            {aiError && (
-                                <p className="text-xs text-red-500 mt-2 ml-2 font-medium flex items-center gap-1">
-                                    <AlertTriangle className="w-3 h-3" /> {aiError}
-                                </p>
-                            )}
-                            <div className="flex items-center gap-4 mt-3 ml-2 text-xs text-gray-500 dark:text-gray-500 font-medium">
-                                <button className="flex items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-                                    <Link2 className="w-3.5 h-3.5" /> Attach Note
-                                </button>
-                                <button className="flex items-center gap-1.5 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
-                                    <Zap className="w-3.5 h-3.5" /> Voice Query
-                                </button>
+                                {weakTopicsLoading ? (
+                                    <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+                                ) : weakTopics.length === 0 ? (
+                                    <div className="text-center py-16 text-gray-400">
+                                        <BarChart2 className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                                        <p className="font-medium">No weak topics detected yet.</p>
+                                        <p className="text-sm mt-1">Ask more questions to get personalised insights.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {weakTopics.map((topic, index) => {
+                                            const isHigh = index < 2;
+                                            return (
+                                                <div key={index} className={`flex items-center justify-between p-4 rounded-xl border ${
+                                                    isHigh
+                                                        ? 'bg-red-50 dark:bg-[#2A171C] border-red-200 dark:border-red-900/40'
+                                                        : 'bg-white dark:bg-[#1A1A1C] border-gray-200 dark:border-white/5'
+                                                }`}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-2 h-2 rounded-full ${isHigh ? 'bg-red-500' : 'bg-gray-400'}`} />
+                                                        <span className={`font-semibold text-sm ${isHigh ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                                                            {topic.topic}
+                                                        </span>
+                                                    </div>
+                                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                                                        isHigh
+                                                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                                                            : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400'
+                                                    }`}>
+                                                        {topic.frequency}x
+                                                    </span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* ── PROGRESS VIEW ── */}
+                    {activeView === 'progress' && (
+                        <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                            <div className="max-w-2xl mx-auto">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <TrendingUp className="w-5 h-5 text-blue-500" />
+                                        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Concept Mastery</h2>
+                                    </div>
+                                    <button onClick={fetchProgress} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
+                                        <RefreshCw className="w-4 h-4" /> Refresh
+                                    </button>
+                                </div>
+                                {progressLoading ? (
+                                    <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
+                                ) : progress.length === 0 ? (
+                                    <div className="text-center py-16 text-gray-400">
+                                        <TrendingUp className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                                        <p className="font-medium">No progress tracked yet.</p>
+                                        <p className="text-sm mt-1">Start asking questions to track your mastery.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {progress.map((item, idx) => (
+                                            <div key={idx} className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-xl p-5 shadow-sm">
+                                                <div className="flex items-center justify-between mb-3">
+                                                    <p className="font-bold text-gray-900 dark:text-gray-100 text-sm">{item.topic}</p>
+                                                    <div className="flex items-center gap-1.5 font-bold text-sm">
+                                                        {item.currentScore}% {renderTrendIcon(item.trend)}
+                                                    </div>
+                                                </div>
+                                                <div className="h-2 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-500 ${
+                                                            item.trend === 'improving' ? 'bg-green-500' :
+                                                            item.trend === 'worsening' ? 'bg-red-500' : 'bg-blue-500'
+                                                        }`}
+                                                        style={{ width: `${item.currentScore}%` }}
+                                                    />
+                                                </div>
+                                                {item.previousScore !== undefined && (
+                                                    <p className="text-xs text-gray-400 mt-2">
+                                                        Previous: {item.previousScore}% &rarr; Now: {item.currentScore}%
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── FILES VIEW ── */}
+                    {activeView === 'files' && (
+                        <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                            <div className="max-w-2xl mx-auto">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-2">
+                                        <Folder className="w-5 h-5 text-teal-500" />
+                                        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Shared Resources</h2>
+                                    </div>
+                                    <button
+                                        onClick={() => setIsUploadModalOpen(true)}
+                                        className="flex items-center gap-1.5 text-sm font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 transition-colors"
+                                    >
+                                        <Upload className="w-4 h-4" /> Upload File
+                                    </button>
+                                </div>
+                                {files.length === 0 ? (
+                                    <div className="text-center py-16 text-gray-400">
+                                        <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
+                                        <p className="font-medium">No files uploaded yet.</p>
+                                        <p className="text-sm mt-1">Upload study materials to share with your session.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {files.map(file => (
+                                            <div key={file.id} className="flex items-center justify-between p-4 bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
+                                                <div className="flex items-center gap-4 overflow-hidden">
+                                                    <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
+                                                        <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
+                                                        <p className="text-xs text-gray-500 truncate">{file.size} · {formatDate(file.uploadDate)}</p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleDownloadFile(file.id, file.name)}
+                                                    className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-gray-900 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-all shrink-0 ml-4"
+                                                >
+                                                    <Download className="w-4 h-4" /> Download
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── LIVE CHAT VIEW ── */}
+                    {activeView === 'chat' && (
+                        <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-400 p-8">
+                            <div className="w-16 h-16 bg-gray-100 dark:bg-white/5 rounded-2xl flex items-center justify-center mb-5">
+                                <MessageSquare className="w-8 h-8 text-gray-400" />
+                            </div>
+                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">Live Chat</h3>
+                            <p className="text-sm max-w-xs">Real-time peer chat is coming soon. Collaborate with your study group in the session.</p>
+                            <span className="mt-5 px-3 py-1 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 text-[11px] font-bold uppercase tracking-wider rounded-full">
+                                Coming Soon
+                            </span>
+                        </div>
+                    )}
+
                 </main>
 
                 {/* RIGHT SIDEBAR */}
