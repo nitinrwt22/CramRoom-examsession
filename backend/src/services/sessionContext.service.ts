@@ -34,6 +34,10 @@ export interface SessionContext {
             text: string;
         }>;
     };
+    recentHistory: Array<{
+        question: string;
+        answer: string;
+    }>;
     flags: {
         isActive: boolean;
         uploadsAllowed: boolean;
@@ -107,8 +111,19 @@ export const buildSessionContext = async (sessionId: string, userId: string): Pr
         `;
         const filesResult = await client.query(filesQuery, [sId]);
 
-        // 4b. Fetch Knowledge Chunks from content/ ingestion
+        // 4b. Fetch Knowledge Chunks from uploaded markdown files
         const knowledgeChunks = await getKnowledgeChunksForSession(sId);
+
+        // 4c. Fetch last 5 AI messages as recent conversation memory
+        const recentMsgsResult = await client.query(
+            `SELECT question, answer
+             FROM session_ai_messages
+             WHERE session_id = $1
+             ORDER BY created_at DESC
+             LIMIT 5`,
+            [sId]
+        );
+        const recentHistory = recentMsgsResult.rows.reverse(); // chronological order
 
         // 5. Process & Calculate Data
         const now = new Date();
@@ -176,6 +191,7 @@ export const buildSessionContext = async (sessionId: string, userId: string): Pr
                     text: kc.chunk_text
                 }))
             },
+            recentHistory,
             flags: {
                 isActive,
                 uploadsAllowed

@@ -77,9 +77,9 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
         try {
             const unchunkedMessages = await getUnchunkedMessages(sessionId);
 
-            if (unchunkedMessages.length >= 20) {
+            if (unchunkedMessages.length >= 5) {
                 const startTime = Date.now();
-                const messagesToChunk = unchunkedMessages.slice(0, 20);
+                const messagesToChunk = unchunkedMessages.slice(0, 5);
 
                 // Format them as Q: question \n A: answer
                 const formattedMessagesBlock = messagesToChunk

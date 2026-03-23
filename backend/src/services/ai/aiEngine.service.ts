@@ -4,6 +4,7 @@ import { DummyAIProvider } from './aiProvider';
 import { getChunkSummaries, getUnchunkedMessages } from '../../models/sessionAiChunk.model';
 import { detectWeakTopics } from './weakTopicAnalytics.service';
 import { logAIEvent } from "../../utils/aiLogger";
+import { selectRelevantChunks } from './knowledgeRetrieval.service';
 /**
  * 1. AIIntent
  * Define allowed intents for the AI Engine.
@@ -67,15 +68,25 @@ Session Context:
 - Available Study Materials: ${materialNames}
 `.trim();
 
-    // 3b. Inject knowledge chunks if available
+    // 3b. Inject relevant knowledge chunks (keyword-ranked)
     let knowledgeBlock = '';
-    const knowledgeChunks = context.knowledge?.chunks || [];
-    if (knowledgeChunks.length > 0) {
-        const knowledgeText = knowledgeChunks
-            .slice(0, 8) // cap to avoid token overflow
+    const allChunks = context.knowledge?.chunks || [];
+    const relevantChunks = selectRelevantChunks(question, allChunks, 5);
+    if (relevantChunks.length > 0) {
+        const knowledgeText = relevantChunks
             .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
             .join('\n\n---\n\n');
-        knowledgeBlock = `\n\nKnowledge Base Context (from study materials):\n${knowledgeText}`;
+        knowledgeBlock = `\n\nKnowledge Base (from uploaded study materials):\n${knowledgeText}`;
+    }
+
+    // 3c. Inject recent conversation history
+    let historyBlock = '';
+    const recentHistory = context.recentHistory || [];
+    if (recentHistory.length > 0) {
+        const historyText = recentHistory
+            .map((msg) => `Q: ${msg.question}\nA: ${msg.answer}`)
+            .join('\n\n');
+        historyBlock = `\n\nRecent Conversation (use for continuity):\n${historyText}`;
     }
 
     // 3. Construct Intent-Specific Prompt
@@ -100,8 +111,8 @@ Question: ${question}
     let aiResponse;
     try {
         aiResponse = await provider.generateResponse({
-            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`, // Combining intent into system/instruction for better adherence
-            contextPrompt: contextPrompt + knowledgeBlock,
+            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
+            contextPrompt: contextPrompt + knowledgeBlock + historyBlock,
             userPrompt
         });
 
@@ -185,14 +196,24 @@ Session Context:
         contextPrompt += "\nPYQ materials detected. Prioritize repeated patterns.";
     }
 
-    // Inject knowledge chunks if available
-    const knowledgeChunksRev = context.knowledge?.chunks || [];
-    if (knowledgeChunksRev.length > 0) {
-        const knowledgeText = knowledgeChunksRev
-            .slice(0, 6) // cap to avoid token overflow
+    // Inject relevant knowledge chunks (keyword-ranked)
+    const allChunksRev = context.knowledge?.chunks || [];
+    const relevantChunksRev = selectRelevantChunks(input.question || '', allChunksRev, 5);
+    if (relevantChunksRev.length > 0) {
+        const knowledgeText = relevantChunksRev
+            .slice(0, 6)
             .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
             .join('\n\n---\n\n');
-        contextPrompt += `\n\nKnowledge Base Context (from study materials):\n${knowledgeText}`;
+        contextPrompt += `\n\nKnowledge Base (from uploaded study materials):\n${knowledgeText}`;
+    }
+
+    // Inject recent conversation history
+    const recentHistoryRev = context.recentHistory || [];
+    if (recentHistoryRev.length > 0) {
+        const historyText = recentHistoryRev
+            .map((msg) => `Q: ${msg.question}\nA: ${msg.answer}`)
+            .join('\n\n');
+        contextPrompt += `\n\nRecent Conversation (use for continuity):\n${historyText}`;
     }
 
     // 3. Construct Intent-Specific Prompt (INTENT RULES)
