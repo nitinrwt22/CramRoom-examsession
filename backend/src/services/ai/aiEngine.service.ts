@@ -67,6 +67,17 @@ Session Context:
 - Available Study Materials: ${materialNames}
 `.trim();
 
+    // 3b. Inject knowledge chunks if available
+    let knowledgeBlock = '';
+    const knowledgeChunks = context.knowledge?.chunks || [];
+    if (knowledgeChunks.length > 0) {
+        const knowledgeText = knowledgeChunks
+            .slice(0, 8) // cap to avoid token overflow
+            .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
+            .join('\n\n---\n\n');
+        knowledgeBlock = `\n\nKnowledge Base Context (from study materials):\n${knowledgeText}`;
+    }
+
     // 3. Construct Intent-Specific Prompt
     const intentPrompt = `
 Intent: Concept Clarification
@@ -90,7 +101,7 @@ Question: ${question}
     try {
         aiResponse = await provider.generateResponse({
             systemPrompt: `${systemPrompt}\n\n${intentPrompt}`, // Combining intent into system/instruction for better adherence
-            contextPrompt,
+            contextPrompt: contextPrompt + knowledgeBlock,
             userPrompt
         });
 
@@ -172,6 +183,16 @@ Session Context:
 
     if (hasPYQ) {
         contextPrompt += "\nPYQ materials detected. Prioritize repeated patterns.";
+    }
+
+    // Inject knowledge chunks if available
+    const knowledgeChunksRev = context.knowledge?.chunks || [];
+    if (knowledgeChunksRev.length > 0) {
+        const knowledgeText = knowledgeChunksRev
+            .slice(0, 6) // cap to avoid token overflow
+            .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
+            .join('\n\n---\n\n');
+        contextPrompt += `\n\nKnowledge Base Context (from study materials):\n${knowledgeText}`;
     }
 
     // 3. Construct Intent-Specific Prompt (INTENT RULES)

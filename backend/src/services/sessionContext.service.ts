@@ -1,4 +1,5 @@
 import pool from '../config/database';
+import { getKnowledgeChunksForSession } from '../models/knowledgeChunk.model';
 
 // ------------------------------------------------------------------
 // Type Definitions
@@ -25,6 +26,12 @@ export interface SessionContext {
             id: string;
             name: string;
             type: 'notes' | 'syllabus' | 'pyq' | 'other';
+        }>;
+    };
+    knowledge: {
+        chunks: Array<{
+            topic: string;
+            text: string;
         }>;
     };
     flags: {
@@ -100,6 +107,9 @@ export const buildSessionContext = async (sessionId: string, userId: string): Pr
         `;
         const filesResult = await client.query(filesQuery, [sId]);
 
+        // 4b. Fetch Knowledge Chunks from content/ ingestion
+        const knowledgeChunks = await getKnowledgeChunksForSession(sId);
+
         // 5. Process & Calculate Data
         const now = new Date();
         const expiryTime = new Date(session.expiry_time);
@@ -159,6 +169,12 @@ export const buildSessionContext = async (sessionId: string, userId: string): Pr
             },
             materials: {
                 files
+            },
+            knowledge: {
+                chunks: knowledgeChunks.map((kc) => ({
+                    topic: kc.topic,
+                    text: kc.chunk_text
+                }))
             },
             flags: {
                 isActive,
