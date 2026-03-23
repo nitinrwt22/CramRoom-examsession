@@ -26,3 +26,21 @@ export const upload = multer({
         fileSize: 10 * 1024 * 1024, // 10MB limit
     },
 });
+
+// In-memory multer for markdown knowledge files (no disk write needed)
+export const memoryUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: {
+        fileSize: 5 * 1024 * 1024, // 5MB limit for .md files
+    },
+    fileFilter: (_req, file, cb) => {
+        if (
+            file.mimetype === 'text/markdown' ||
+            file.originalname.endsWith('.md')
+        ) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only .md (Markdown) files are allowed for knowledge upload'));
+        }
+    },
+});

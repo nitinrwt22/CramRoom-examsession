@@ -1,7 +1,8 @@
 import express from 'express';
 import { authenticateToken, AuthRequest } from '../middleware/auth.middleware';
 import * as sessionFileService from '../services/sessionFile.service';
-import { upload } from '../config/multer';
+import * as knowledgeService from '../services/knowledgeUpload.service';
+import { upload, memoryUpload } from '../config/multer';
 
 const router = express.Router();
 
@@ -108,6 +109,90 @@ router.get('/files/:fileId/download', async (req: AuthRequest, res) => {
         } else {
             res.status(500).json({ error: error.message });
         }
+    }
+});
+
+// ─────────────────────────────────────────────
+// KNOWLEDGE FILE ROUTES (.md upload + parse)
+// ─────────────────────────────────────────────
+
+// POST /session/:id/knowledge — upload + parse + chunk a .md knowledge file
+router.post('/:id/knowledge', memoryUpload.single('file'), async (req: AuthRequest, res) => {
+    try {
+        const sessionId = parseInt(req.params.id);
+        const userId = req.user.id;
+        const file = req.file;
+        const contentType = req.body.contentType as string | undefined;
+
+        if (isNaN(sessionId)) {
+            res.status(400).json({ error: 'Invalid session ID' });
+            return;
+        }
+        if (!file) {
+            res.status(400).json({ error: 'No file uploaded' });
+            return;
+        }
+
+        const result = await knowledgeService.processKnowledgeUpload(
+            sessionId,
+            userId,
+            file.buffer,
+            file.originalname,
+            contentType
+        );
+        res.status(201).json(result);
+    } catch (error: any) {
+        console.error('Error in POST /session/:id/knowledge:', error);
+        const status =
+            error.message === 'Session not found' ? 404
+            : error.message === 'Session is not active or has expired' ? 400
+            : error.message === 'User is not a participant in this session' ? 403
+            : 500;
+        res.status(status).json({ error: error.message });
+    }
+});
+
+// GET /session/:id/knowledge — list all knowledge files for a session
+router.get('/:id/knowledge', async (req: AuthRequest, res) => {
+    try {
+        const sessionId = parseInt(req.params.id);
+        const userId = req.user.id;
+
+        if (isNaN(sessionId)) {
+            res.status(400).json({ error: 'Invalid session ID' });
+            return;
+        }
+
+        const files = await knowledgeService.getKnowledgeFiles(sessionId, userId);
+        res.status(200).json(files);
+    } catch (error: any) {
+        console.error('Error in GET /session/:id/knowledge:', error);
+        const status = error.message.includes('not a participant') ? 403 : 500;
+        res.status(status).json({ error: error.message });
+    }
+});
+
+// DELETE /session/:id/knowledge/:fileId — delete knowledge file + its chunks
+router.delete('/:id/knowledge/:fileId', async (req: AuthRequest, res) => {
+    try {
+        const sessionId = parseInt(req.params.id);
+        const fileId = parseInt(req.params.fileId);
+        const userId = req.user.id;
+
+        if (isNaN(sessionId) || isNaN(fileId)) {
+            res.status(400).json({ error: 'Invalid session or file ID' });
+            return;
+        }
+
+        const result = await knowledgeService.deleteKnowledgeFile(fileId, sessionId, userId);
+        res.status(200).json(result);
+    } catch (error: any) {
+        console.error('Error in DELETE /session/:id/knowledge/:fileId:', error);
+        const status =
+            error.message === 'Knowledge file not found in this session' ? 404
+            : error.message === 'Unauthorized' ? 403
+            : 500;
+        res.status(status).json({ error: error.message });
     }
 });
 

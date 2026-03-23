@@ -5,6 +5,9 @@ import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { FileUploadModal } from '@/components/file-upload-modal'
+import { KnowledgeUploadModal, KnowledgeContentType } from '@/components/session/KnowledgeUploadModal'
+import { KnowledgeFileList } from '@/components/session/KnowledgeFileList'
+import { KnowledgeFile } from '@/components/session/KnowledgeFileItem'
 import { 
     Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
     TrendingDown, TrendingUp, Minus, Upload, RefreshCw, AlertTriangle, 
@@ -64,6 +67,11 @@ export default function SessionDetailPage() {
     const [leaving, setLeaving] = useState(false)
     const [activeView, setActiveView] = useState<'assistant' | 'topics' | 'progress' | 'files' | 'chat'>('assistant')
 
+    // Knowledge files state
+    const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([])
+    const [knowledgeLoading, setKnowledgeLoading] = useState(true)
+    const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false)
+
     // AI State
     const [question, setQuestion] = useState('')
     const [aiHistory, setAiHistory] = useState<AIMessage[]>([])
@@ -107,6 +115,18 @@ export default function SessionDetailPage() {
             setFiles(mappedFiles)
         } catch (fileErr) {
             console.error('Error fetching files:', fileErr)
+        }
+    }
+
+    const fetchKnowledgeFiles = async () => {
+        setKnowledgeLoading(true)
+        try {
+            const res = await api.get(`/session/${params.id}/knowledge`)
+            setKnowledgeFiles(res.data)
+        } catch (err) {
+            console.error('Error fetching knowledge files:', err)
+        } finally {
+            setKnowledgeLoading(false)
         }
     }
 
@@ -161,6 +181,7 @@ export default function SessionDetailPage() {
                 await fetchAIHistory()
                 await fetchWeakTopics()
                 await fetchProgress()
+                await fetchKnowledgeFiles()
             } catch (err) {
                 console.error('Error fetching session:', err)
                 setError('Failed to load session details')
@@ -213,6 +234,27 @@ export default function SessionDetailPage() {
 
     const handleDeleteFile = (fileId: string) => {
         setFiles(files.filter((f) => f.id !== fileId))
+    }
+
+    const handleKnowledgeUpload = async (file: File, contentType: KnowledgeContentType) => {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('contentType', contentType)
+        await api.post(`/session/${params.id}/knowledge`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' },
+        })
+        await fetchKnowledgeFiles()
+    }
+
+    const handleKnowledgeDelete = async (fileId: number) => {
+        if (!confirm('Remove this knowledge file from the session?')) return
+        try {
+            await api.delete(`/session/${params.id}/knowledge/${fileId}`)
+            setKnowledgeFiles(prev => prev.filter(f => f.id !== fileId))
+        } catch (err) {
+            console.error('Error deleting knowledge file:', err)
+            alert('Failed to delete. Please try again.')
+        }
     }
 
     const formatDate = (dateString: string) => {
@@ -666,6 +708,14 @@ export default function SessionDetailPage() {
                                         ))}
                                     </div>
                                 )}
+
+                                {/* ── KNOWLEDGE BASE ── */}
+                                <KnowledgeFileList
+                                    files={knowledgeFiles}
+                                    loading={knowledgeLoading}
+                                    onAddClick={() => setIsKnowledgeModalOpen(true)}
+                                    onDelete={handleKnowledgeDelete}
+                                />
                             </div>
                         </div>
                     )}
@@ -825,6 +875,11 @@ export default function SessionDetailPage() {
                 isOpen={isUploadModalOpen}
                 onClose={() => setIsUploadModalOpen(false)}
                 onUpload={handleUploadFile}
+            />
+            <KnowledgeUploadModal
+                isOpen={isKnowledgeModalOpen}
+                onClose={() => setIsKnowledgeModalOpen(false)}
+                onUpload={handleKnowledgeUpload}
             />
         </div>
     )
