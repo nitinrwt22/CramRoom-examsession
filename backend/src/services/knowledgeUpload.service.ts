@@ -101,8 +101,8 @@ export const processKnowledgeUpload = async (
             throw new Error('User is not a participant in this session');
         }
 
-        // 3. Parse frontmatter
-        const rawContent = fileBuffer.toString('utf-8');
+        // 3. Parse frontmatter — strip null bytes first (PostgreSQL UTF-8 rejects 0x00)
+        const rawContent = fileBuffer.toString('utf-8').replace(/\0/g, '');
         const parsed = matter(rawContent);
         const fm = parsed.data as {
             type?: string;
@@ -124,10 +124,10 @@ export const processKnowledgeUpload = async (
 
         // 4. Insert file record into `files` table
         const fileInsert = await client.query(
-            `INSERT INTO files (title, topic, content_type)
-             VALUES ($1, $2, $3)
+            `INSERT INTO files (file_name, file_type, file_url, title, topic, content_type)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id`,
-            [title, topic, resolvedType]
+            [originalName, 'text/markdown', 'knowledge', title, topic, resolvedType]
         );
         const fileId: number = fileInsert.rows[0].id;
 
