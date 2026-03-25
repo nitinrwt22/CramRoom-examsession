@@ -7,6 +7,7 @@ import { saveSessionAIMessage, getSessionAIHistory } from '../models/sessionAiMe
 import { getUnchunkedMessages, markMessagesAsChunked, saveChunkSummary } from '../models/sessionAiChunk.model';
 import { detectWeakTopics } from '../services/ai/weakTopicAnalytics.service';
 import { getTopicProgressComparison } from '../services/ai/topicProgress.service';
+import { generateExpectedQuestions } from '../services/ai/pyqRecommendation.service';
 import { logAIEvent } from "../utils/aiLogger";
 
 /**
@@ -272,6 +273,43 @@ export const getTopicProgress = async (req: AuthRequest, res: Response): Promise
             res.status(403).json({ error: error.message });
         } else {
             res.status(500).json({ error: 'Internal Server Error fetching topic progress' });
+        }
+    }
+};
+
+/**
+ * Retrieves the expected PYQs for a session.
+ */
+export const getExpectedQuestions = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const sessionId = req.params.sessionId;
+        const userId = req.user?.id;
+
+        if (!sessionId) {
+            res.status(400).json({ error: 'Missing sessionId parameter' });
+            return;
+        }
+
+        if (!userId) {
+            res.status(401).json({ error: 'Unauthorized' });
+            return;
+        }
+
+        // Validate Session Participation
+        const sessionIdNum = parseInt(sessionId, 10);
+        await getSessionDetails(sessionIdNum, userId);
+
+        const expectedQuestions = await generateExpectedQuestions(sessionId);
+
+        res.status(200).json({ expectedQuestions });
+
+    } catch (error: any) {
+        console.error('Error in getExpectedQuestions:', error);
+
+        if (error.message.includes('Session not found or user is not a participant')) {
+            res.status(403).json({ error: error.message });
+        } else {
+            res.status(500).json({ error: 'Internal Server Error fetching expected questions' });
         }
     }
 };

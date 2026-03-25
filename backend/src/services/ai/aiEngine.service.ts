@@ -10,7 +10,7 @@ import { selectRelevantChunks } from './knowledgeRetrieval.service';
  * Define allowed intents for the AI Engine.
  * For now, strictly limited to 'concept_clarification'.
  */
-export type AIIntent = 'concept_clarification' | 'revision_guidance' | 'chunk_summary' | 'session_summary';
+export type AIIntent = 'concept_clarification' | 'revision_guidance' | 'chunk_summary' | 'session_summary' | 'pyq_answer_generation';
 
 /**
  * 2. AIEngineInput
@@ -461,6 +461,108 @@ ${recentMessagesText}
 };
 
 /**
+ * Handler for 'pyq_answer_generation' intent.
+ * Generates an answer formatted specifically based on marks weightage.
+ */
+const handlePyqAnswerGeneration = async (input: AIEngineInput): Promise<AIEngineResponse> => {
+    const provider = new DummyAIProvider();
+    const { context } = input;
+    
+    // Parse question and marks from JSON input
+    let questionText = input.question;
+    let marks = null;
+    try {
+        const parsed = JSON.parse(input.question);
+        if (parsed.questionText) {
+             questionText = parsed.questionText;
+             marks = parsed.marks;
+        }
+    } catch (e) {
+        // Fallback for raw string
+    }
+
+    // 1. Construct System Prompt (SYSTEM RULES)
+    const systemPrompt = `
+You are an expert AI exam assistant. Your primary goal is to provide highly structured, marks-weighted answers for previous year questions (PYQs).
+- Academic and formal tone.
+- Adhere strictly to the formatting rules corresponding to the marks weightage.
+- Use the provided context materials as your primary source of truth.
+`.trim();
+
+    // 2. Formatting rules based on marks
+    let intentPrompt = `Answer this question perfectly for the exam.\n`;
+    if (marks) {
+        if (marks <= 2) {
+            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide only a short, direct definition (2-3 lines max).\n`;
+        } else if (marks <= 5) {
+            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a clear definition, 3-4 key bullet points, and a small example.\n`;
+        } else if (marks <= 10) {
+            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a definition, step-by-step explanation, a text-based flowchart/diagram using standard characters, advantages/disadvantages, and a brief summary.\n`;
+        } else {
+            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a highly detailed explanation, a structured flowchart or diagram in text, comprehensive examples, comparison tables if applicable, and a strong conclusion.\n`;
+        }
+    }
+
+    // 3. Inject relevant knowledge chunks (keyword-ranked)
+    let knowledgeBlock = '';
+    const allChunks = context.knowledge?.chunks || [];
+    const relevantChunks = selectRelevantChunks(questionText, allChunks, 7);
+    if (relevantChunks.length > 0) {
+        const knowledgeText = relevantChunks
+            .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
+            .join('\n\n---\n\n');
+        knowledgeBlock = `\n\nKnowledge Base:\n${knowledgeText}`;
+    }
+
+    const contextPrompt = `Session Outline: ${context.sessionMeta.subject} \n${knowledgeBlock}`;
+
+    // 4. Call AI Provider
+    const sessionId = context.sessionMeta.sessionId;
+    const startTime = Date.now();
+    let aiResponse;
+    try {
+        aiResponse = await provider.generateResponse({
+            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
+            contextPrompt,
+            userPrompt: `Question: ${questionText}`
+        });
+
+        const durationMs = Date.now() - startTime;
+        logAIEvent({
+            type: "AI_CALL",
+            sessionId,
+            intent: input.intent,
+            durationMs,
+            metadata: {
+                responseLength: aiResponse.text.length,
+                marks: marks
+            }
+        });
+    } catch (error: any) {
+        logAIEvent({
+            type: "AI_ERROR",
+            sessionId,
+            intent: input.intent,
+            metadata: {
+                error: error.message
+            }
+        });
+        throw error;
+    }
+
+    // Extract sources
+    const sourcesUsed = context.materials.files
+        .filter(f => aiResponse.text.includes(f.name))
+        .map(f => f.name);
+
+    return {
+        answer: aiResponse.text,
+        confidence: "high",
+        sourcesUsed: sourcesUsed.length > 0 ? sourcesUsed : ["General Knowledge"]
+    };
+};
+
+/**
  * Main entry point for the AI Engine.
  * Routes logic based on the intent provided in the input.
  * 
@@ -474,6 +576,10 @@ export const runAIEngine = async (input: AIEngineInput): Promise<AIEngineRespons
     // Route logic based on intent
     if (intent === 'concept_clarification') {
         return handleConceptClarification(input);
+    }
+
+    if (intent === 'pyq_answer_generation') {
+        return handlePyqAnswerGeneration(input);
     }
 
     if (intent === 'revision_guidance') {

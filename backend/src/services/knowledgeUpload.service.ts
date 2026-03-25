@@ -52,6 +52,59 @@ function chunkByHeadings(content: string, fallbackTopic: string): Array<{ headin
     return chunks;
 }
 
+/**
+ * Custom parser for PYQ files. Extracts marks, year, and question text.
+ */
+function parsePyqContent(content: string, fallbackTopic: string, fallbackYear: number | null): Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> {
+    const chunks: Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> = [];
+    const sections = content.split(/^(?=## )/m);
+
+    for (const section of sections) {
+        const trimmed = section.trim();
+        if (!trimmed) continue;
+
+        const headingMatch = trimmed.match(/^## (.+)/);
+        if (headingMatch) {
+            let heading = headingMatch[1].trim();
+            let body = trimmed.replace(/^## .+\n?/, '').trim();
+            
+            let marks: number | null = null;
+            const marksMatch = heading.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
+            if (marksMatch) {
+                marks = parseInt(marksMatch[1], 10);
+                heading = heading.replace(marksMatch[0], '').trim();
+            } else {
+                const bodyMarksMatch = body.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
+                if (bodyMarksMatch) {
+                    marks = parseInt(bodyMarksMatch[1], 10);
+                }
+            }
+
+            let year: number | null = fallbackYear;
+            const yearMatch = heading.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
+            if (yearMatch) {
+                year = parseInt(yearMatch[1], 10);
+                heading = heading.replace(yearMatch[0], '').trim();
+            } else {
+                const bodyYearMatch = body.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
+                if (bodyYearMatch) {
+                    year = parseInt(bodyYearMatch[1], 10);
+                }
+            }
+
+            // Cleanup heading
+            heading = heading.replace(/^[\s\-\:]+|[\s\-\:]+$/g, '').trim();
+
+            if (heading.length > 5) {
+                const chunk_text = body ? `${heading}\n\n${body}` : heading;
+                chunks.push({ topic: fallbackTopic, chunk_text, marks, year });
+            }
+        }
+    }
+
+    return chunks;
+}
+
 // ---------------------------------------------------------------------------
 // Main service
 // ---------------------------------------------------------------------------
@@ -131,16 +184,35 @@ export const processKnowledgeUpload = async (
         );
         const fileId: number = fileInsert.rows[0].id;
 
-        // 5. Chunk markdown content
-        const chunks = chunkByHeadings(parsed.content, topic);
+        // 5. Parse content based on type
+        let totalChunks = 0;
 
-        // 6. Insert chunks into session_ai_chunks
-        for (const chunk of chunks) {
-            await client.query(
-                `INSERT INTO session_ai_chunks (session_id, file_id, topic, chunk_text)
-                 VALUES ($1, $2, $3, $4)`,
-                [sessionId, fileId, chunk.heading, chunk.body]
-            );
+        if (resolvedType === 'pyqs') {
+            // Extract a generic year from the title if available
+            const yearMatch = title.match(/(20\d{2})/);
+            const fallbackYear = yearMatch ? parseInt(yearMatch[1], 10) : null;
+            
+            const pyqChunks = parsePyqContent(parsed.content, topic, fallbackYear);
+            totalChunks = pyqChunks.length;
+            
+            for (const chunk of pyqChunks) {
+                await client.query(
+                    `INSERT INTO session_ai_chunks (session_id, file_id, topic, chunk_text, marks, year)
+                     VALUES ($1, $2, $3, $4, $5, $6)`,
+                    [sessionId, fileId, chunk.topic, chunk.chunk_text, chunk.marks, chunk.year]
+                );
+            }
+        } else {
+            const chunks = chunkByHeadings(parsed.content, topic);
+            totalChunks = chunks.length;
+
+            for (const chunk of chunks) {
+                await client.query(
+                    `INSERT INTO session_ai_chunks (session_id, file_id, topic, chunk_text)
+                     VALUES ($1, $2, $3, $4)`,
+                    [sessionId, fileId, chunk.heading, chunk.body]
+                );
+            }
         }
 
         await client.query('COMMIT');
@@ -150,7 +222,7 @@ export const processKnowledgeUpload = async (
             title,
             topic,
             contentType: resolvedType,
-            chunkCount: chunks.length,
+            chunkCount: totalChunks,
         };
 
     } catch (error) {

@@ -65,7 +65,7 @@ export default function SessionDetailPage() {
     const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
     const [leaving, setLeaving] = useState(false)
-    const [activeView, setActiveView] = useState<'assistant' | 'topics' | 'progress' | 'files' | 'chat'>('assistant')
+    const [activeView, setActiveView] = useState<'assistant' | 'expected' | 'topics' | 'progress' | 'files' | 'chat'>('assistant')
 
     // Knowledge files state
     const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([])
@@ -86,6 +86,29 @@ export default function SessionDetailPage() {
     // Topic Progress State
     const [progress, setProgress] = useState<ProgressItem[]>([])
     const [progressLoading, setProgressLoading] = useState(true)
+
+    // Expected Questions State
+    const [expectedQuestions, setExpectedQuestions] = useState<any[]>([])
+    const [expectedLoading, setExpectedLoading] = useState(true)
+    const [pyqAnswers, setPyqAnswers] = useState<Record<string, {loading: boolean, answer: string | null}>>({})
+
+    const handleGeneratePyqAnswer = async (q: any) => {
+        if (pyqAnswers[q.id]?.answer || pyqAnswers[q.id]?.loading) return; 
+        
+        setPyqAnswers(prev => ({ ...prev, [q.id]: { loading: true, answer: null } }));
+        
+        try {
+            const payload = {
+                intent: 'pyq_answer_generation',
+                question: JSON.stringify({ questionText: q.question_text, marks: q.marks })
+            };
+            const response = await api.post(`/api/sessions/${params.id}/ai/query`, payload);
+            setPyqAnswers(prev => ({ ...prev, [q.id]: { loading: false, answer: response.data.answer } }));
+        } catch (err) {
+            console.error(err);
+            setPyqAnswers(prev => ({ ...prev, [q.id]: { loading: false, answer: 'Failed to generate answer. Please try again.' } }));
+        }
+    }
 
     // Ref for auto-scrolling
     const historyEndRef = useRef<HTMLDivElement>(null)
@@ -166,6 +189,18 @@ export default function SessionDetailPage() {
         }
     }
 
+    const fetchExpectedQuestions = async () => {
+        setExpectedLoading(true)
+        try {
+            const response = await api.get(`/api/sessions/${params.id}/ai/expected-questions`)
+            setExpectedQuestions(response.data.expectedQuestions || [])
+        } catch (err) {
+            console.error('Error fetching expected questions:', err)
+        } finally {
+            setExpectedLoading(false)
+        }
+    }
+
     useEffect(() => {
         const fetchData = async () => {
             try {
@@ -182,6 +217,7 @@ export default function SessionDetailPage() {
                 await fetchWeakTopics()
                 await fetchProgress()
                 await fetchKnowledgeFiles()
+                await fetchExpectedQuestions()
             } catch (err) {
                 console.error('Error fetching session:', err)
                 setError('Failed to load session details')
@@ -414,6 +450,7 @@ export default function SessionDetailPage() {
                         <nav className="space-y-1">
                             {([
                                 { id: 'assistant', label: 'Assistant', icon: <Sparkles className="w-4 h-4" /> },
+                                { id: 'expected',  label: 'PYQ Predictions', icon: <Sparkles className="w-4 h-4 text-amber-500 dark:text-amber-400" /> },
                                 { id: 'topics',    label: 'Topics',    icon: <BarChart2 className="w-4 h-4" /> },
                                 { id: 'progress',  label: 'Progress',  icon: <TrendingUp className="w-4 h-4" /> },
                                 { id: 'files',     label: 'Files',     icon: <Folder className="w-4 h-4" /> },
@@ -555,6 +592,122 @@ export default function SessionDetailPage() {
                                 </div>
                             </div>
                         </>
+                    )}
+
+                    {/* ── EXPECTED QUESTIONS VIEW ── */}
+                    {activeView === 'expected' && (
+                        <div className="flex-1 overflow-y-auto p-6 lg:p-8">
+                            <div className="max-w-4xl mx-auto">
+                                <div className="flex items-center justify-between mb-8">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
+                                            <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Predicted Questions</h2>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">AI suggestions based on PYQ frequency & weak areas</p>
+                                        </div>
+                                    </div>
+                                    <button onClick={fetchExpectedQuestions} disabled={expectedLoading} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#202022] transition-colors shadow-sm disabled:opacity-50">
+                                        <RefreshCw className={`w-3.5 h-3.5 ${expectedLoading ? 'animate-spin' : ''}`} /> 
+                                        {expectedLoading ? 'Analyzing...' : 'Refresh'}
+                                    </button>
+                                </div>
+
+                                {expectedLoading && expectedQuestions.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                                        <Loader2 className="w-10 h-10 animate-spin mb-4 text-amber-500" />
+                                        <p className="font-medium text-lg text-gray-600 dark:text-gray-300">Analyzing Past Papers...</p>
+                                        <p className="text-sm mt-2">Cross-referencing your weak topics with historical frequency.</p>
+                                    </div>
+                                ) : expectedQuestions.length === 0 ? (
+                                    <div className="text-center py-24 bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-zinc-800/80 rounded-2xl shadow-sm">
+                                        <BookOpen className="w-10 h-10 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+                                        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">No PYQs uploaded</h3>
+                                        <p className="text-sm text-gray-500 mt-1.5 max-w-xs mx-auto">Upload Previous Year Question papers to generate exam predictions.</p>
+                                        <button onClick={() => setIsKnowledgeModalOpen(true)} className="mt-5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">Upload PYQ Document</button>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-10">
+                                        {['Highly Expected', 'Medium Probability', 'Low Probability'].map(probLabel => {
+                                            const questions = expectedQuestions.filter(q => q.probability === probLabel);
+                                            if (questions.length === 0) return null;
+                                            
+                                            const isHigh = probLabel === 'Highly Expected';
+                                            const isMed = probLabel === 'Medium Probability';
+                                            
+                                            return (
+                                                <div key={probLabel} className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`h-5 w-1.5 rounded-full ${isHigh ? 'bg-red-500' : isMed ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
+                                                        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{probLabel}</h3>
+                                                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 ml-1">{questions.length}</span>
+                                                    </div>
+                                                    
+                                                    <div className="grid gap-3">
+                                                        {questions.map((q, idx) => {
+                                                            const ansState = pyqAnswers[q.id];
+                                                            const isExpanded = !!ansState;
+                                                            return (
+                                                                <div key={q.id} className="bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-zinc-800/60 rounded-xl overflow-hidden shadow-sm hover:border-gray-300 dark:hover:border-zinc-600 transition-colors group">
+                                                                    <div 
+                                                                        onClick={() => handleGeneratePyqAnswer(q)}
+                                                                        className="p-4 sm:p-5 cursor-pointer flex gap-3 items-start"
+                                                                    >
+                                                                        <div className="flex-1 mt-0.5">
+                                                                            <div className="flex flex-wrap items-center gap-2 mb-2">
+                                                                                <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-md">{q.topic}</span>
+                                                                                {q.year && <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-md">{q.year}</span>}
+                                                                                {q.marks && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md">{q.marks} Marks</span>}
+                                                                                <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-md ml-auto flex items-center gap-1"><RefreshCw className="w-3 h-3"/> Repeated {q.frequency}x</span>
+                                                                            </div>
+                                                                            <p className="text-[15px] font-medium text-gray-800 dark:text-gray-200 leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors pr-8">
+                                                                                {q.question_text}
+                                                                            </p>
+                                                                            {!isExpanded && (
+                                                                                <div className="mt-4">
+                                                                                    <button 
+                                                                                        onClick={(e) => { e.stopPropagation(); handleGeneratePyqAnswer(q); }}
+                                                                                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
+                                                                                    >
+                                                                                        <Sparkles className="w-3.5 h-3.5" />
+                                                                                        Generate AI Answer
+                                                                                    </button>
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="shrink-0 pt-1">
+                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600'}`}>
+                                                                                {ansState?.loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Sparkles className="w-4 h-4" />}
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                    
+                                                                    {isExpanded && (
+                                                                        <div className="border-t border-gray-100 dark:border-zinc-800/60 bg-gray-50/50 dark:bg-[#141416]/50 p-5 animate-in slide-in-from-top-2 fade-in">
+                                                                            {ansState.loading ? (
+                                                                                <div className="flex items-center gap-3 text-gray-500">
+                                                                                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                                                                                    <span className="text-[13px] font-medium">Drafting structured {q.marks ? `${q.marks}-mark` : ''} answer...</span>
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className="prose prose-sm dark:prose-invert max-w-none text-[14px] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                                                                    {ansState.answer}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
                     )}
 
                     {/* ── TOPICS VIEW ── */}
