@@ -22,7 +22,8 @@ import { logAIEvent } from "../utils/aiLogger";
 export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { sessionId } = req.params;
-        const { intent, question } = req.body;
+        const { intent } = req.body;
+        let { question } = req.body;
         const userId = req.user?.id; // Auth middleware ensures this exists
 
         // 1. Validation
@@ -48,10 +49,15 @@ export const handleAIQuery = async (req: AuthRequest, res: Response): Promise<vo
         }
 
         // Strictly limit allowed intents for now (as per requirements)
-        const allowedIntents = ['concept_clarification', 'revision_guidance', 'chunk_summary', 'session_summary'];
+        const allowedIntents = ['concept_clarification', 'revision_guidance', 'chunk_summary', 'session_summary', 'pyq_answer_generation'];
         if (!allowedIntents.includes(intent)) {
             res.status(400).json({ error: `Unsupported intent: ${intent}` });
             return;
+        }
+
+        // Prevent 400 Token excess by truncating ridiculously massive queries
+        if (question && typeof question === 'string' && question.length > 20000) {
+            question = question.substring(0, 20000) + '... [TRUNCATED DUE TO LENGTH]';
         }
 
         // 2. Build Session Context

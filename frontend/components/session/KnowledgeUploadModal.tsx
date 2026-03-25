@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { X, Upload, CheckCircle, Loader2, FileText, BookOpen, ClipboardList, Link, FileCode } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -62,17 +62,24 @@ interface KnowledgeUploadModalProps {
     isOpen: boolean
     onClose: () => void
     onUpload: (file: File, contentType: KnowledgeContentType) => Promise<void>
+    defaultContentType?: KnowledgeContentType
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function KnowledgeUploadModal({ isOpen, onClose, onUpload }: KnowledgeUploadModalProps) {
+export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContentType = 'notes' }: KnowledgeUploadModalProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
-    const [contentType, setContentType] = useState<KnowledgeContentType>('notes')
+    const [contentType, setContentType] = useState<KnowledgeContentType>(defaultContentType)
     const [isDragging, setIsDragging] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const inputRef = useRef<HTMLInputElement>(null)
+
+    useEffect(() => {
+        if (isOpen) {
+            setContentType(defaultContentType)
+        }
+    }, [isOpen, defaultContentType])
 
     if (!isOpen) return null
 
@@ -111,6 +118,7 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload }: KnowledgeUpl
         setSelectedFile(null)
         setError(null)
         setUploading(false)
+        setContentType(defaultContentType)
         onClose()
     }
 

@@ -57,16 +57,16 @@ function chunkByHeadings(content: string, fallbackTopic: string): Array<{ headin
  */
 function parsePyqContent(content: string, fallbackTopic: string, fallbackYear: number | null): Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> {
     const chunks: Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> = [];
-    const sections = content.split(/^(?=## )/m);
+    const sections = content.split(/^(?=## |(?:Q?\d+\.)(?:\s+|$))/m);
 
     for (const section of sections) {
         const trimmed = section.trim();
         if (!trimmed) continue;
 
-        const headingMatch = trimmed.match(/^## (.+)/);
-        if (headingMatch) {
+        const headingMatch = trimmed.match(/^(?:## |(?:Q?\d+\.))\s*(.*)/);
+        if (headingMatch && headingMatch[1].trim()) {
             let heading = headingMatch[1].trim();
-            let body = trimmed.replace(/^## .+\n?/, '').trim();
+            let body = trimmed.replace(/^(?:## |(?:Q?\d+\.))\s*.*\n?/, '').trim();
             
             let marks: number | null = null;
             const marksMatch = heading.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
@@ -95,10 +95,20 @@ function parsePyqContent(content: string, fallbackTopic: string, fallbackYear: n
             // Cleanup heading
             heading = heading.replace(/^[\s\-\:]+|[\s\-\:]+$/g, '').trim();
 
-            if (heading.length > 5) {
+            if (heading.length > 3 || body.length > 5) {
                 const chunk_text = body ? `${heading}\n\n${body}` : heading;
-                chunks.push({ topic: fallbackTopic, chunk_text, marks, year });
+                chunks.push({ topic: fallbackTopic, chunk_text: chunk_text.trim(), marks, year });
             }
+        } else if (trimmed.length > 10) {
+            let marks: number | null = null;
+            const marksMatch = trimmed.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
+            if (marksMatch) marks = parseInt(marksMatch[1], 10);
+
+            let year: number | null = fallbackYear;
+            const yearMatch = trimmed.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
+            if (yearMatch) year = parseInt(yearMatch[1], 10);
+
+            chunks.push({ topic: fallbackTopic, chunk_text: trimmed, marks, year });
         }
     }
 
@@ -156,6 +166,11 @@ export const processKnowledgeUpload = async (
 
         // 3. Parse frontmatter — strip null bytes first (PostgreSQL UTF-8 rejects 0x00)
         const rawContent = fileBuffer.toString('utf-8').replace(/\0/g, '');
+        
+        if (rawContent.trim().startsWith('%PDF-') || rawContent.includes('\uFFFD\uFFFD\uFFFD')) {
+            throw new Error('Invalid file format: Detected binary/PDF content. Please upload plain Markdown text only.');
+        }
+
         const parsed = matter(rawContent);
         const fm = parsed.data as {
             type?: string;

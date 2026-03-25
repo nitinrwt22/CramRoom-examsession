@@ -71,6 +71,7 @@ export default function SessionDetailPage() {
     const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([])
     const [knowledgeLoading, setKnowledgeLoading] = useState(true)
     const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false)
+    const [knowledgeModalDefaultType, setKnowledgeModalDefaultType] = useState<KnowledgeContentType>('notes')
 
     // AI State
     const [question, setQuestion] = useState('')
@@ -276,10 +277,19 @@ export default function SessionDetailPage() {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('contentType', contentType)
-        await api.post(`/session/${params.id}/knowledge`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-        })
-        await fetchKnowledgeFiles()
+        try {
+            await api.post(`/session/${params.id}/knowledge`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' },
+            })
+            await fetchKnowledgeFiles()
+            
+            if (contentType === 'pyqs') {
+                await fetchExpectedQuestions()
+            }
+        } catch (error) {
+            console.error('Error uploading knowledge file:', error)
+            alert('Failed to upload knowledge file. Please try again.')
+        }
     }
 
     const handleKnowledgeDelete = async (fileId: number) => {
@@ -625,7 +635,7 @@ export default function SessionDetailPage() {
                                         <BookOpen className="w-10 h-10 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                                         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">No PYQs uploaded</h3>
                                         <p className="text-sm text-gray-500 mt-1.5 max-w-xs mx-auto">Upload Previous Year Question papers to generate exam predictions.</p>
-                                        <button onClick={() => setIsKnowledgeModalOpen(true)} className="mt-5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">Upload PYQ Document</button>
+                                        <button onClick={() => { setKnowledgeModalDefaultType('pyqs'); setIsKnowledgeModalOpen(true); }} className="mt-5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">Upload PYQ Document</button>
                                     </div>
                                 ) : (
                                     <div className="space-y-10">
@@ -1033,6 +1043,7 @@ export default function SessionDetailPage() {
                 isOpen={isKnowledgeModalOpen}
                 onClose={() => setIsKnowledgeModalOpen(false)}
                 onUpload={handleKnowledgeUpload}
+                defaultContentType={knowledgeModalDefaultType}
             />
         </div>
     )
