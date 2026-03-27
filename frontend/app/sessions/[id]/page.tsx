@@ -326,6 +326,11 @@ export default function SessionDetailPage() {
         }
     }
 
+    const handleLogout = () => {
+        localStorage.removeItem("token");
+        router.push("/");
+    };
+
     const handleAskAI = async () => {
         if (!question.trim()) return
         setAiLoading(true)
@@ -491,7 +496,7 @@ export default function SessionDetailPage() {
                             <Settings className="w-4 h-4" />
                             Settings
                         </button>
-                        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-500/80 hover:text-red-600 dark:hover:text-red-400 text-sm transition-colors opacity-80 hover:opacity-100">
+                        <button onClick={handleLogout} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-red-500/80 hover:text-red-600 dark:hover:text-red-400 text-sm transition-colors opacity-80 hover:opacity-100">
                             <LogOut className="w-4 h-4" />
                             Logout
                         </button>
