@@ -27,20 +27,29 @@ export const upload = multer({
     },
 });
 
-// In-memory multer for markdown knowledge files (no disk write needed)
+// Accepted MIME types for knowledge file uploads
+const KNOWLEDGE_MIMETYPES = [
+    'text/markdown',
+    'text/plain',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+];
+
+// In-memory multer for knowledge files (.md, .pdf, .docx)
 export const memoryUpload = multer({
     storage: multer.memoryStorage(),
     limits: {
-        fileSize: 5 * 1024 * 1024, // 5MB limit for .md files
+        fileSize: 20 * 1024 * 1024, // 20MB limit
     },
     fileFilter: (_req, file, cb) => {
-        if (
-            file.mimetype === 'text/markdown' ||
-            file.originalname.endsWith('.md')
-        ) {
+        const name = file.originalname.toLowerCase();
+        const isValidExt = name.endsWith('.md') || name.endsWith('.pdf') || name.endsWith('.docx');
+        const isValidMime = KNOWLEDGE_MIMETYPES.includes(file.mimetype);
+
+        if (isValidExt || isValidMime) {
             cb(null, true);
         } else {
-            cb(new Error('Only .md (Markdown) files are allowed for knowledge upload'));
+            cb(new Error('Only .md, .pdf, and .docx files are allowed for knowledge upload'));
         }
     },
 });

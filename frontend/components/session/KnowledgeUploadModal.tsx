@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { X, Upload, CheckCircle, Loader2, FileText, BookOpen, ClipboardList, Link, FileCode } from 'lucide-react'
+import { X, Upload, CheckCircle, Loader2, FileText, BookOpen, ClipboardList, Link, FileCode, File } from 'lucide-react'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -83,9 +83,18 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
 
     if (!isOpen) return null
 
+    const ACCEPTED_EXTENSIONS = ['.md', '.pdf', '.docx']
+
+    const getFileIcon = (fileName: string) => {
+        if (fileName.endsWith('.pdf')) return <FileText className="w-5 h-5 text-red-400" />
+        if (fileName.endsWith('.docx')) return <File className="w-5 h-5 text-blue-400" />
+        return <FileCode className="w-5 h-5 text-gray-400" />
+    }
+
     const handleFile = (file: File) => {
-        if (!file.name.endsWith('.md')) {
-            setError('Only .md (Markdown) files are supported.')
+        const name = file.name.toLowerCase()
+        if (!ACCEPTED_EXTENSIONS.some(ext => name.endsWith(ext))) {
+            setError('Only .md, .pdf, and .docx files are supported.')
             return
         }
         setError(null)
@@ -130,7 +139,7 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/8">
                     <div>
                         <h2 className="text-base font-bold text-gray-900 dark:text-white">Add Knowledge File</h2>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Upload a .md file — AI will use it as context</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Upload a .md, .pdf, or .docx — AI will use it as context</p>
                     </div>
                     <button
                         onClick={handleClose}
@@ -170,7 +179,7 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                     {/* Step 2: File drop zone */}
                     <div>
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                            2 — Upload your .md file
+                            2 — Upload your file (.md, .pdf, or .docx)
                         </p>
                         <div
                             onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
@@ -187,7 +196,9 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                         >
                             {selectedFile ? (
                                 <>
-                                    <CheckCircle className="w-8 h-8 text-emerald-500" />
+                                    <div className="w-12 h-12 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                                        {getFileIcon(selectedFile.name)}
+                                    </div>
                                     <div className="text-center">
                                         <p className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{selectedFile.name}</p>
                                         <p className="text-xs text-gray-400 mt-0.5">{(selectedFile.size / 1024).toFixed(1)} KB · Click to change</p>
@@ -199,8 +210,8 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                                         <Upload className="w-5 h-5 text-gray-400" />
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Drop your .md file here</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">or click to browse</p>
+                                        <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Drop your file here</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">Supports <span className="font-bold text-gray-500 dark:text-gray-300">.md</span>, <span className="font-bold text-gray-500 dark:text-gray-300">.pdf</span>, <span className="font-bold text-gray-500 dark:text-gray-300">.docx</span> · or click to browse</p>
                                     </div>
                                 </>
                             )}
@@ -208,7 +219,7 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                         <input
                             ref={inputRef}
                             type="file"
-                            accept=".md"
+                            accept=".md,.pdf,.docx"
                             className="hidden"
                             onChange={(e) => {
                                 const f = e.currentTarget.files?.[0]

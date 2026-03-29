@@ -1,6 +1,6 @@
-import fs from 'fs';
 import matter from 'gray-matter';
 import pool from '../config/database';
+import { detectFileType, extractText, normaliseToMarkdown } from '../utils/fileConverter.util';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -120,14 +120,14 @@ function parsePyqContent(content: string, fallbackTopic: string, fallbackYear: n
 // ---------------------------------------------------------------------------
 
 /**
- * Processes a markdown knowledge file upload for a session.
+ * Processes a knowledge file upload (.md, .pdf, or .docx) for a session.
  *
  * Pipeline:
  *  1. Verify session is active and user is a participant
- *  2. Parse YAML frontmatter from file buffer
- *  3. Resolve content type (frontmatter > user-provided > fallback)
+ *  2. Extract text from file (PDF/Word → plain text; MD → raw string)
+ *  3. Resolve topic and content type
  *  4. Insert file record into `files` table
- *  5. Chunk content by ## headings
+ *  5. Chunk content by headings
  *  6. Insert chunks into `session_ai_chunks`
  */
 export const processKnowledgeUpload = async (
@@ -164,22 +164,28 @@ export const processKnowledgeUpload = async (
             throw new Error('User is not a participant in this session');
         }
 
-        // 3. Parse frontmatter — strip null bytes first (PostgreSQL UTF-8 rejects 0x00)
-        const rawContent = fileBuffer.toString('utf-8').replace(/\0/g, '');
-        
-        if (rawContent.trim().startsWith('%PDF-') || rawContent.includes('\uFFFD\uFFFD\uFFFD')) {
-            throw new Error('Invalid file format: Detected binary/PDF content. Please upload plain Markdown text only.');
+        // 3. Detect file type and extract plain text
+        const fileType = detectFileType(originalName);
+        const mimeTypeMap = { md: 'text/markdown', pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' };
+        const extractedText = await extractText(fileBuffer, fileType);
+
+        // For MD files: parse YAML frontmatter. For PDF/Word: treat all as plain content.
+        let fm: { type?: string; topic?: string } = {};
+        let markdownContent: string;
+
+        if (fileType === 'md') {
+            const parsed = matter(extractedText);
+            fm = parsed.data as { type?: string; topic?: string };
+            markdownContent = parsed.content;
+        } else {
+            // Convert PDF/Word extracted text to a markdown-like format for chunking
+            markdownContent = normaliseToMarkdown(extractedText);
         }
 
-        const parsed = matter(rawContent);
-        const fm = parsed.data as {
-            type?: string;
-            topic?: string;
-            session_tags?: string[];
-        };
-
         // Resolve topic and content type
-        const stem = originalName.replace(/\.md$/i, '').replace(/-/g, ' ');
+        const stem = originalName
+            .replace(/\.(md|pdf|docx)$/i, '')
+            .replace(/[-_]/g, ' ');
         const topic: string = fm.topic || stem;
         const title: string = topic;
 
@@ -195,7 +201,7 @@ export const processKnowledgeUpload = async (
             `INSERT INTO files (file_name, file_type, file_url, title, topic, content_type)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id`,
-            [originalName, 'text/markdown', 'knowledge', title, topic, resolvedType]
+            [originalName, mimeTypeMap[fileType], 'knowledge', title, topic, resolvedType]
         );
         const fileId: number = fileInsert.rows[0].id;
 
@@ -207,7 +213,7 @@ export const processKnowledgeUpload = async (
             const yearMatch = title.match(/(20\d{2})/);
             const fallbackYear = yearMatch ? parseInt(yearMatch[1], 10) : null;
             
-            const pyqChunks = parsePyqContent(parsed.content, topic, fallbackYear);
+            const pyqChunks = parsePyqContent(markdownContent, topic, fallbackYear);
             totalChunks = pyqChunks.length;
             
             for (const chunk of pyqChunks) {
@@ -218,7 +224,7 @@ export const processKnowledgeUpload = async (
                 );
             }
         } else {
-            const chunks = chunkByHeadings(parsed.content, topic);
+            const chunks = chunkByHeadings(markdownContent, topic);
             totalChunks = chunks.length;
 
             for (const chunk of chunks) {
