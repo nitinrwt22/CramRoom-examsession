@@ -14,6 +14,7 @@ import {
     Zap, Link2, BookOpen, BarChart2, Folder, MessageSquare, Settings, 
     UserPlus, Users, ChevronRight, CornerDownRight 
 } from 'lucide-react'
+import ExamCountdown from '@/components/session/ExamCountdown'
 import api from '@/lib/axios'
 
 interface SessionFile {
@@ -405,7 +406,7 @@ export default function SessionDetailPage() {
     return (
         <div className="h-screen overflow-hidden bg-white dark:bg-[#121212] text-gray-900 dark:text-gray-100 flex flex-col font-sans transition-colors duration-300">
             {/* TOP NAVBAR */}
-            <header className="h-[64px] border-b border-gray-200 dark:border-white/10 flex items-center justify-between px-6 bg-white/80 dark:bg-black/50 backdrop-blur-md shrink-0 z-20">
+            <header className="h-[80px] border-b border-gray-200 dark:border-white/10 flex items-center justify-between px-6 bg-white/80 dark:bg-black/50 backdrop-blur-md shrink-0 z-20">
                 <div className="flex items-center gap-8">
                     <h1 className="text-xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
                         <span className="font-extrabold tracking-tight">CramRoom</span> Workspace
@@ -420,11 +421,8 @@ export default function SessionDetailPage() {
                 <div className="flex items-center gap-6">
                     {/* Exam countdown */}
                     {session.exam_date && (
-                        <div className="hidden sm:flex flex-col items-end">
-                            <span className="text-[10px] uppercase font-bold text-gray-500 dark:text-gray-400 tracking-wider">Exam Date</span>
-                            <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                                {formatDate(session.exam_date)} ({getDaysLeft(session.exam_date)})
-                            </span>
+                        <div className="hidden sm:flex mr-6">
+                            <ExamCountdown targetDate={session.exam_date} />
                         </div>
                     )}
                     <Button
@@ -442,7 +440,7 @@ export default function SessionDetailPage() {
             </header>
 
             {/* MAIN CONTENT AREA */}
-            <div className="flex flex-1 overflow-hidden h-[calc(100vh-64px)]">
+            <div className="flex flex-1 overflow-hidden h-[calc(100vh-80px)]">
                 
                 {/* LEFT SIDEBAR */}
                 <aside className="w-64 border-r border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#161618] shrink-0 hidden lg:flex flex-col justify-between p-4 z-10">
