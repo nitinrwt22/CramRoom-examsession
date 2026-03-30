@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import api from "@/lib/axios";
 import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,9 +9,17 @@ import { Input } from "@/components/ui/input";
 
 export default function JoinSessionPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const [sessionId, setSessionId] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const idFromUrl = searchParams.get("id");
+        if (idFromUrl) {
+            setSessionId(idFromUrl);
+        }
+    }, [searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

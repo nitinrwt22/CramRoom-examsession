@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FileUploadModal } from '@/components/file-upload-modal'
 import { KnowledgeUploadModal, KnowledgeContentType } from '@/components/session/KnowledgeUploadModal'
 import { KnowledgeFileList } from '@/components/session/KnowledgeFileList'
+import { InvitePeerModal } from '@/components/session/InvitePeerModal'
 import { KnowledgeFile } from '@/components/session/KnowledgeFileItem'
 import { 
     Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
@@ -65,6 +66,7 @@ export default function SessionDetailPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+    const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
     const [leaving, setLeaving] = useState(false)
     const [activeView, setActiveView] = useState<'assistant' | 'expected' | 'topics' | 'progress' | 'files' | 'chat'>('assistant')
 
@@ -486,7 +488,10 @@ export default function SessionDetailPage() {
                     </div>
 
                     <div className="space-y-2 mb-2">
-                        <button className="w-full bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-800 dark:text-gray-200 font-semibold text-xs h-10 rounded-lg tracking-wider flex items-center justify-center gap-2 transition-colors">
+                        <button
+                            onClick={() => setIsInviteModalOpen(true)}
+                            className="w-full bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-800 dark:text-gray-200 font-semibold text-xs h-10 rounded-lg tracking-wider flex items-center justify-center gap-2 transition-colors"
+                        >
                             <UserPlus className="w-4 h-4" />
                             INVITE PEER
                         </button>
@@ -1041,6 +1046,12 @@ export default function SessionDetailPage() {
                 isOpen={isUploadModalOpen}
                 onClose={() => setIsUploadModalOpen(false)}
                 onUpload={handleUploadFile}
+            />
+            <InvitePeerModal
+                isOpen={isInviteModalOpen}
+                onClose={() => setIsInviteModalOpen(false)}
+                sessionId={params.id}
+                subject={session.subject}
             />
             <KnowledgeUploadModal
                 isOpen={isKnowledgeModalOpen}
