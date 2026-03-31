@@ -8,6 +8,7 @@ import { FileUploadModal } from '@/components/file-upload-modal'
 import { KnowledgeUploadModal, KnowledgeContentType } from '@/components/session/KnowledgeUploadModal'
 import { KnowledgeFileList } from '@/components/session/KnowledgeFileList'
 import { InvitePeerModal } from '@/components/session/InvitePeerModal'
+import { SettingsModal } from '@/components/session/SettingsModal'
 import { KnowledgeFile } from '@/components/session/KnowledgeFileItem'
 import { 
     Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
@@ -68,6 +69,7 @@ export default function SessionDetailPage() {
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
     const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
     const [leaving, setLeaving] = useState(false)
+    const [isSettingsOpen, setIsSettingsOpen] = useState(false)
     const [activeView, setActiveView] = useState<'assistant' | 'expected' | 'topics' | 'progress' | 'files' | 'chat'>('assistant')
 
     // Knowledge files state
@@ -437,7 +439,9 @@ export default function SessionDetailPage() {
                         {leaving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                         Leave Session
                     </Button>
-                    <Settings className="w-5 h-5 text-gray-400 hover:text-gray-600 dark:hover:text-white cursor-pointer" />
+                    <button onClick={() => setIsSettingsOpen(true)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
+                        <Settings className="w-5 h-5 text-gray-400 hover:text-gray-600 dark:hover:text-white" />
+                    </button>
                 </div>
             </header>
 
@@ -495,7 +499,7 @@ export default function SessionDetailPage() {
                             <UserPlus className="w-4 h-4" />
                             INVITE PEER
                         </button>
-                        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors">
+                        <button onClick={() => setIsSettingsOpen(true)} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 text-sm transition-colors">
                             <Settings className="w-4 h-4" />
                             Settings
                         </button>
@@ -1052,6 +1056,13 @@ export default function SessionDetailPage() {
                 onClose={() => setIsInviteModalOpen(false)}
                 sessionId={params.id}
                 subject={session.subject}
+            />
+            <SettingsModal
+                isOpen={isSettingsOpen}
+                onClose={() => setIsSettingsOpen(false)}
+                subject={session.subject}
+                onLeaveSession={handleLeaveSession}
+                onLogout={handleLogout}
             />
             <KnowledgeUploadModal
                 isOpen={isKnowledgeModalOpen}
