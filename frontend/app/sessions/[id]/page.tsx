@@ -43,6 +43,11 @@ interface Session {
     exam_date: string
     expiry_time: string
     role: 'host' | 'participant'
+    participants?: {
+        user_id: number;
+        name: string;
+        role: 'host' | 'participant';
+    }[]
 }
 
 interface AIMessage {
@@ -1090,9 +1095,44 @@ export default function SessionDetailPage() {
 
                 {/* RIGHT SIDEBAR */}
                 <aside className="w-80 lg:w-[360px] border-l border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-[#161618] shrink-0 overflow-y-auto p-5 xl:p-6 space-y-6 z-10 hidden md:block">
-                    
-                    {/* Weak Topics */}
-                    <Card className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
+                    {activeView === 'chat' ? (
+                        <div className="flex flex-col h-full font-sans -m-5 xl:-m-6">
+                            <div className="p-6 pb-2">
+                                <div className="flex items-center justify-between mb-6">
+                                    <h3 className="text-xs font-black uppercase tracking-widest text-gray-500 dark:text-gray-400">Room Members</h3>
+                                    <span className="text-[10px] bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded-full font-bold shadow-sm">{session?.participants?.length || 0}</span>
+                                </div>
+                            </div>
+                            <div className="space-y-1 overflow-y-auto custom-scrollbar px-4 pb-4 flex-1">
+                                {session?.participants?.map(user => {
+                                    const isMe = currentUser?.id === user.user_id;
+                                    const initials = user.name.substring(0, 2).toUpperCase();
+                                    return (
+                                    <div key={user.user_id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white dark:hover:bg-[#1A1A1C] transition-all cursor-pointer group shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-white/5">
+                                        <div className="relative">
+                                            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm shadow-inner ring-1 ring-black/5 dark:ring-white/5">
+                                                {initials}
+                                            </div>
+                                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-gray-50 dark:border-[#161618] rounded-full"></span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                                {isMe ? 'You' : user.name}
+                                            </p>
+                                            {user.role === 'host' ? (
+                                                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-tighter">Moderator</p>
+                                            ) : (
+                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Online</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                )})}
+                            </div>
+                        </div>
+                    ) : (
+                        <>
+                            {/* Weak Topics */}
+                            <Card className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
                         <CardHeader className="p-4 pb-3 flex flex-row items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <AlertTriangle className="w-4 h-4 text-red-500" />
@@ -1219,6 +1259,8 @@ export default function SessionDetailPage() {
                             Early Access
                         </span>
                     </div>
+                        </>
+                    )}
 
                 </aside>
             </div>
