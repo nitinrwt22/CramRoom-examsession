@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { io, Socket } from 'socket.io-client'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -59,7 +60,28 @@ interface ProgressItem {
     trend: 'improving' | 'worsening' | 'stable' | 'insufficient_data'
 }
 
+interface ChatMessage {
+    id?: number
+    room_id: number
+    user_id: number
+    username: string
+    message_text: string
+    timestamp?: string
+}
+
 export default function SessionDetailPage() {
+    const decodeJwt = (token: string) => {
+        try {
+            const base64Url = token.split('.')[1]
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+            }).join(''))
+            return JSON.parse(jsonPayload)
+        } catch (e) {
+            return null
+        }
+    }
     const params = useParams<{ id: string }>()
     const router = useRouter()
     const [session, setSession] = useState<Session | null>(null)
@@ -71,6 +93,14 @@ export default function SessionDetailPage() {
     const [leaving, setLeaving] = useState(false)
     const [isSettingsOpen, setIsSettingsOpen] = useState(false)
     const [activeView, setActiveView] = useState<'assistant' | 'expected' | 'topics' | 'progress' | 'files' | 'chat'>('assistant')
+
+    // Live Chat State
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+    const [chatInput, setChatInput] = useState('')
+    const [chatLoading, setChatLoading] = useState(false)
+    const socketRef = useRef<Socket | null>(null)
+    const chatEndRef = useRef<HTMLDivElement>(null)
+    const [currentUser, setCurrentUser] = useState<{ id: number, name: string } | null>(null)
 
     // Knowledge files state
     const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([])
@@ -215,6 +245,14 @@ export default function SessionDetailPage() {
                     return
                 }
 
+                const token = localStorage.getItem('token')
+                if (token) {
+                    const decoded = decodeJwt(token)
+                    if (decoded) {
+                        setCurrentUser({ id: decoded.id, name: decoded.name || decoded.email })
+                    }
+                }
+
                 const sessionResponse = await api.get(`/session/${params.id}`)
                 setSession(sessionResponse.data)
 
@@ -238,6 +276,66 @@ export default function SessionDetailPage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [params.id, router])
+
+    useEffect(() => {
+        if (activeView === 'chat' && session && currentUser) {
+            let activeSocket: Socket;
+            
+            const initChat = async () => {
+                setChatLoading(true)
+                try {
+                    const res = await api.get(`/rooms/${params.id}/messages`)
+                    setChatMessages(res.data)
+                } catch (err) {
+                    console.error('Failed to load chat history:', err)
+                } finally {
+                    setChatLoading(false)
+                }
+
+                activeSocket = io('http://localhost:5001')
+                socketRef.current = activeSocket
+
+                activeSocket.emit('join_room', {
+                    room_id: parseInt(params.id),
+                    user_id: currentUser.id,
+                    username: currentUser.name
+                })
+
+                activeSocket.on('receive_message', (msg: ChatMessage) => {
+                    setChatMessages(prev => [...prev, msg])
+                })
+            }
+
+            initChat()
+
+            return () => {
+                activeSocket?.disconnect()
+                socketRef.current = null
+            }
+        }
+    }, [activeView, session, currentUser, params.id])
+
+    useEffect(() => {
+        if (activeView === 'chat') {
+            setTimeout(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+            }, 100)
+        }
+    }, [chatMessages.length, activeView])
+
+    const handleSendChatMessage = (e?: React.FormEvent) => {
+        if (e) e.preventDefault()
+        if (!chatInput.trim() || !socketRef.current || !currentUser) return
+
+        socketRef.current.emit('send_message', {
+            room_id: parseInt(params.id),
+            user_id: currentUser.id,
+            username: currentUser.name,
+            message_text: chatInput,
+            timestamp: new Date().toISOString()
+        })
+        setChatInput('')
+    }
 
     const handleUploadFile = async (file: File) => {
         if (!session || session.status === 'expired') return
@@ -897,15 +995,94 @@ export default function SessionDetailPage() {
 
                     {/* ── LIVE CHAT VIEW ── */}
                     {activeView === 'chat' && (
-                        <div className="flex-1 flex flex-col items-center justify-center text-center text-gray-400 p-8">
-                            <div className="w-16 h-16 bg-gray-100 dark:bg-white/5 rounded-2xl flex items-center justify-center mb-5">
-                                <MessageSquare className="w-8 h-8 text-gray-400" />
+                        <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-[#141416]">
+                            <div className="border-b border-gray-100 dark:border-white/5 px-6 py-3 shrink-0 flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+                                    <span>Rooms</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                    <span className="text-blue-600 dark:text-blue-500 font-bold border-b-2 border-blue-600 pb-1 -mb-[13px]">{session?.subject || 'Session'} Live Chat</span>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <span className="flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full text-[11px] font-bold text-green-700 dark:text-green-400 uppercase tracking-widest">
+                                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                        Connected
+                                    </span>
+                                </div>
                             </div>
-                            <h3 className="text-lg font-bold text-gray-700 dark:text-gray-300 mb-2">Live Chat</h3>
-                            <p className="text-sm max-w-xs">Real-time peer chat is coming soon. Collaborate with your study group in the session.</p>
-                            <span className="mt-5 px-3 py-1 bg-teal-50 dark:bg-teal-900/20 text-teal-700 dark:text-teal-400 text-[11px] font-bold uppercase tracking-wider rounded-full">
-                                Coming Soon
-                            </span>
+
+                            <section className="flex-1 flex flex-col overflow-hidden relative">
+                                <div className="flex-1 overflow-y-auto px-6 py-8 space-y-6 scroll-smooth pb-32">
+                                    {chatLoading ? (
+                                        <div className="flex justify-center items-center h-full text-gray-400">
+                                            <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading chat...
+                                        </div>
+                                    ) : chatMessages.length === 0 ? (
+                                        <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-60">
+                                            <MessageSquare className="w-10 h-10 mb-3" />
+                                            <p className="font-medium text-sm">No messages yet.</p>
+                                        </div>
+                                    ) : (
+                                        chatMessages.map((msg, idx) => {
+                                            const isMe = msg.user_id === currentUser?.id;
+                                            return (
+                                                <div key={msg.id || idx} className={`flex flex-col gap-1.5 ${isMe ? 'items-end' : 'items-start'}`}>
+                                                    <div className={`flex items-end gap-3 max-w-[85%] ${isMe ? 'flex-row-reverse' : ''}`}>
+                                                        <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${isMe ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-gray-300'}`}>
+                                                            {msg.username.substring(0, 2).toUpperCase()}
+                                                        </div>
+                                                        <div className={`flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                                                            <div className={`text-[11px] font-semibold text-gray-500 flex items-center gap-2 ${isMe ? 'flex-row-reverse mr-1' : 'ml-1'}`}>
+                                                                <span>{isMe ? 'You' : msg.username}</span>
+                                                                <span className="font-normal opacity-60">{formatTime(msg.timestamp || new Date().toISOString())}</span>
+                                                            </div>
+                                                            <div className={`p-3.5 sm:p-4 text-[14px] leading-relaxed shadow-sm ${
+                                                                isMe 
+                                                                ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm' 
+                                                                : 'bg-gray-100 dark:bg-[#1A1A1C] border border-gray-200/50 dark:border-white/5 text-gray-800 dark:text-gray-200 rounded-2xl rounded-bl-sm'
+                                                            }`}>
+                                                                {msg.message_text}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })
+                                    )}
+                                    <div ref={chatEndRef} className="h-4" />
+                                </div>
+
+                                {/* Sticky Message Input */}
+                                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-transparent dark:from-[#141416] dark:via-[#141416] z-10 w-full pointer-events-none">
+                                    <div className="max-w-4xl mx-auto relative group pointer-events-auto">
+                                        <div className="absolute inset-0 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-xl transition-all group-focus-within:bg-blue-500/10 dark:group-focus-within:bg-blue-500/20"></div>
+                                        <div className="relative bg-white dark:bg-[#1A1A1C] border border-gray-300 dark:border-gray-700/50 rounded-full p-2 flex items-center gap-3 shadow-lg ring-1 ring-black/5 dark:ring-white/5 group-focus-within:ring-blue-500/40 transition-all">
+                                            <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-600 transition-colors shrink-0">
+                                                <Plus className="w-5 h-5" />
+                                            </button>
+                                            <input 
+                                                className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] text-gray-900 dark:text-white placeholder:text-gray-400 px-2 py-2 outline-none" 
+                                                placeholder="Type your message..." 
+                                                type="text"
+                                                value={chatInput}
+                                                onChange={e => setChatInput(e.target.value)}
+                                                onKeyDown={e => {
+                                                    if (e.key === 'Enter') handleSendChatMessage()
+                                                }}
+                                            />
+                                            <div className="flex items-center gap-2 pr-1 shrink-0">
+                                                <button 
+                                                    onClick={handleSendChatMessage}
+                                                    disabled={!chatInput.trim()}
+                                                    className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 active:scale-95 transition-all shadow-md disabled:opacity-50 disabled:active:scale-100"
+                                                >
+                                                    <Send className="w-4 h-4 ml-0.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p className="text-[10px] text-center text-gray-400 mt-2 font-medium pointer-events-auto">Session Chat is real-time • Please be respectful</p>
+                                </div>
+                            </section>
                         </div>
                     )}
 
