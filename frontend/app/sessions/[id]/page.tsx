@@ -106,6 +106,7 @@ export default function SessionDetailPage() {
     const socketRef = useRef<Socket | null>(null)
     const chatEndRef = useRef<HTMLDivElement>(null)
     const [currentUser, setCurrentUser] = useState<{ id: number, name: string } | null>(null)
+    const [activeUserIds, setActiveUserIds] = useState<number[]>([])
 
     // Knowledge files state
     const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([])
@@ -308,6 +309,10 @@ export default function SessionDetailPage() {
 
                 activeSocket.on('receive_message', (msg: ChatMessage) => {
                     setChatMessages(prev => [...prev, msg])
+                })
+
+                activeSocket.on('active_users', (userIds: number[]) => {
+                    setActiveUserIds(userIds)
                 })
             }
 
@@ -1103,30 +1108,58 @@ export default function SessionDetailPage() {
                                     <span className="text-[10px] bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded-full font-bold shadow-sm">{session?.participants?.length || 0}</span>
                                 </div>
                             </div>
-                            <div className="space-y-1 overflow-y-auto custom-scrollbar px-4 pb-4 flex-1">
-                                {session?.participants?.map(user => {
-                                    const isMe = currentUser?.id === user.user_id;
-                                    const initials = user.name.substring(0, 2).toUpperCase();
-                                    return (
-                                    <div key={user.user_id} className="flex items-center gap-3 p-3 rounded-xl hover:bg-white dark:hover:bg-[#1A1A1C] transition-all cursor-pointer group shadow-sm border border-transparent hover:border-gray-200 dark:hover:border-white/5">
-                                        <div className="relative">
-                                            <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-sm shadow-inner ring-1 ring-black/5 dark:ring-white/5">
-                                                {initials}
+                            <div className="overflow-y-auto custom-scrollbar px-4 pb-4 flex-1">
+                                {(() => {
+                                    const allParticipants = session?.participants || [];
+                                    const onlineParticipants = allParticipants.filter(p => activeUserIds.includes(p.user_id));
+                                    const offlineParticipants = allParticipants.filter(p => !activeUserIds.includes(p.user_id));
+
+                                    const renderUser = (user: typeof allParticipants[0], isOnline: boolean) => {
+                                        const isMe = currentUser?.id === user.user_id;
+                                        const initials = user.name.substring(0, 2).toUpperCase();
+                                        return (
+                                            <div key={user.user_id} className={`flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer group shadow-sm border border-transparent ${isOnline ? 'hover:bg-white dark:hover:bg-[#1A1A1C] hover:border-gray-200 dark:hover:border-white/5 opacity-100' : 'opacity-60 grayscale-[50%]'}`}>
+                                                <div className="relative">
+                                                    <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-inner ring-1 ring-black/5 dark:ring-white/5 ${isOnline ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'bg-gray-200 dark:bg-zinc-800 text-gray-500'}`}>
+                                                        {initials}
+                                                    </div>
+                                                    {isOnline && (
+                                                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-gray-50 dark:border-[#161618] rounded-full"></span>
+                                                    )}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                                        {isMe ? 'You' : user.name}
+                                                    </p>
+                                                    {user.role === 'host' ? (
+                                                        <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-tighter">Moderator</p>
+                                                    ) : (
+                                                        <p className={`text-[10px] font-medium ${isOnline ? 'text-green-600 dark:text-green-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                            {isOnline ? 'Online' : 'Offline'}
+                                                        </p>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-gray-50 dark:border-[#161618] rounded-full"></span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-gray-900 dark:text-white truncate">
-                                                {isMe ? 'You' : user.name}
-                                            </p>
-                                            {user.role === 'host' ? (
-                                                <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-tighter">Moderator</p>
-                                            ) : (
-                                                <p className="text-[10px] text-gray-500 dark:text-gray-400 font-medium">Online</p>
+                                        );
+                                    };
+
+                                    return (
+                                        <div className="space-y-6">
+                                            {onlineParticipants.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-3 mb-2">Online — {onlineParticipants.length}</p>
+                                                    {onlineParticipants.map(u => renderUser(u, true))}
+                                                </div>
+                                            )}
+                                            {offlineParticipants.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <p className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest pl-3 mb-2">Offline — {offlineParticipants.length}</p>
+                                                    {offlineParticipants.map(u => renderUser(u, false))}
+                                                </div>
                                             )}
                                         </div>
-                                    </div>
-                                )})}
+                                    );
+                                })()}
                             </div>
                         </div>
                     ) : (

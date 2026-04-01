@@ -6,14 +6,21 @@ export const setupChatSocket = (io: Server) => {
         console.log(`[Socket] User connected: ${socket.id}`);
 
         // Join room event
-        socket.on('join_room', (data: { room_id: number; user_id: number; username: string }) => {
+        socket.on('join_room', async (data: { room_id: number; user_id: number; username: string }) => {
             const { room_id, user_id, username } = data;
             
+            socket.data.userId = user_id;
+            socket.data.roomId = room_id;
+
             // Convert room_id to string for socket.io rooms
             const roomStr = `room_${room_id}`;
             socket.join(roomStr);
             
             console.log(`[Socket] User ${username} (${user_id}) joined room ${room_id}`);
+            
+            const sockets = await io.in(roomStr).fetchSockets();
+            const activeUsers = Array.from(new Set(sockets.map(s => s.data.userId).filter(Boolean)));
+            io.in(roomStr).emit('active_users', activeUsers);
             
             // Optional: notify others in the room
             socket.to(roomStr).emit('user_joined', { username, room_id, timestamp: new Date() });
@@ -46,10 +53,14 @@ export const setupChatSocket = (io: Server) => {
         });
 
         // Disconnect event
-        socket.on('disconnect', () => {
-             // socket.rooms is automatically cleaned up by socket.io upon disconnect
-             // if you need to perform additional actions, you can do them here.
+        socket.on('disconnect', async () => {
              console.log(`[Socket] User disconnected: ${socket.id}`);
+             if (socket.data.roomId) {
+                 const roomStr = `room_${socket.data.roomId}`;
+                 const sockets = await io.in(roomStr).fetchSockets();
+                 const activeUsers = Array.from(new Set(sockets.map(s => s.data.userId).filter(Boolean)));
+                 io.in(roomStr).emit('active_users', activeUsers);
+             }
         });
     });
 };
