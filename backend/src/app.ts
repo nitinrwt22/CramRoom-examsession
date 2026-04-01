@@ -4,6 +4,7 @@ import authRoutes from "./routes/auth.routes";
 import sessionRoutes from "./routes/session.routes";
 import sessionFilesRoutes from "./routes/sessionFiles.routes";
 import dashboardRoutes from "./routes/dashboard.routes";
+import roomRoutes from "./routes/roomRoutes";
 
 import { authenticateToken } from "./middleware/auth.middleware";
 
@@ -35,6 +36,7 @@ app.use("/session", authenticateToken, sessionRoutes);
 app.use("/api/sessions", authenticateToken, sessionRoutes);
 app.use("/session", authenticateToken, sessionFilesRoutes);
 app.use("/dashboard", authenticateToken, dashboardRoutes);
+app.use("/rooms", roomRoutes); // Public for now, or use authenticateToken if requested
 // Example: app.use("/api/users", userRoutes);
 
 export default app;
