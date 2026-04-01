@@ -15,8 +15,9 @@ import {
     Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
     TrendingDown, TrendingUp, Minus, Upload, RefreshCw, AlertTriangle, 
     Zap, Link2, BookOpen, BarChart2, Folder, MessageSquare, Settings, 
-    UserPlus, Users, ChevronRight, CornerDownRight 
+    UserPlus, Users, ChevronRight, CornerDownRight, Smile 
 } from 'lucide-react'
+import EmojiPicker, { Theme } from 'emoji-picker-react'
 import ExamCountdown from '@/components/session/ExamCountdown'
 import api from '@/lib/axios'
 
@@ -103,6 +104,7 @@ export default function SessionDetailPage() {
     const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
     const [chatInput, setChatInput] = useState('')
     const [chatLoading, setChatLoading] = useState(false)
+    const [showEmojiPicker, setShowEmojiPicker] = useState(false)
     const socketRef = useRef<Socket | null>(null)
     const chatEndRef = useRef<HTMLDivElement>(null)
     const [currentUser, setCurrentUser] = useState<{ id: number, name: string } | null>(null)
@@ -1065,9 +1067,26 @@ export default function SessionDetailPage() {
                                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-transparent dark:from-[#141416] dark:via-[#141416] z-10 w-full pointer-events-none">
                                     <div className="max-w-4xl mx-auto relative group pointer-events-auto">
                                         <div className="absolute inset-0 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-xl transition-all group-focus-within:bg-blue-500/10 dark:group-focus-within:bg-blue-500/20"></div>
-                                        <div className="relative bg-white dark:bg-[#1A1A1C] border border-gray-300 dark:border-gray-700/50 rounded-full p-2 flex items-center gap-3 shadow-lg ring-1 ring-black/5 dark:ring-white/5 group-focus-within:ring-blue-500/40 transition-all">
-                                            <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-600 transition-colors shrink-0">
+                                        {showEmojiPicker && (
+                                            <div className="absolute bottom-full left-4 mb-4 z-50 shadow-2xl rounded-2xl animate-in slide-in-from-bottom-5 fade-in duration-200">
+                                                <EmojiPicker 
+                                                    onEmojiClick={(emojiData) => {
+                                                        setChatInput(prev => prev + emojiData.emoji)
+                                                        setShowEmojiPicker(false)
+                                                    }}
+                                                    theme={Theme.AUTO}
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="relative bg-white dark:bg-[#1A1A1C] border border-gray-300 dark:border-gray-700/50 rounded-full p-2 flex items-center gap-2 lg:gap-3 shadow-lg ring-1 ring-black/5 dark:ring-white/5 group-focus-within:ring-blue-500/40 transition-all">
+                                            <button className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-blue-600 transition-colors shrink-0 hidden sm:flex">
                                                 <Plus className="w-5 h-5" />
+                                            </button>
+                                            <button 
+                                                onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                                                className={`w-10 h-10 rounded-full flex items-center justify-center transition-colors shrink-0 ${showEmojiPicker ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/40' : 'text-gray-400 hover:text-blue-600'}`}
+                                            >
+                                                <Smile className="w-5 h-5" />
                                             </button>
                                             <input 
                                                 className="flex-1 bg-transparent border-none focus:ring-0 text-[14px] text-gray-900 dark:text-white placeholder:text-gray-400 px-2 py-2 outline-none" 
