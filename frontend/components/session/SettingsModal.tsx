@@ -1,6 +1,8 @@
 'use client'
 
-import { X, Bell, Moon, LogOut, Settings } from 'lucide-react'
+import { X, Bell, Moon, LogOut, Settings, Sun } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import { useEffect, useState } from 'react'
 
 interface SettingsModalProps {
     isOpen: boolean
@@ -11,7 +13,14 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose, subject, onLeaveSession, onLogout }: SettingsModalProps) {
-    if (!isOpen) return null
+    const { theme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
+
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    if (!isOpen || !mounted) return null
 
     return (
         <>
@@ -61,12 +70,13 @@ export function SettingsModal({ isOpen, onClose, subject, onLeaveSession, onLogo
                                 description="Coming soon"
                                 disabled
                             />
-                            {/* Dark mode note */}
+                            {/* Appearance toggle */}
                             <SettingRow
-                                icon={<Moon className="w-4 h-4 text-purple-500" />}
+                                icon={theme === 'dark' ? <Moon className="w-4 h-4 text-purple-500" /> : <Sun className="w-4 h-4 text-orange-500" />}
                                 label="Appearance"
-                                description="Coming soon"
-                                disabled
+                                description={`${theme === 'dark' ? 'Dark' : 'Light'} Mode`}
+                                isActive={theme === 'dark'}
+                                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
                             />
                         </div>
                     </div>
@@ -109,14 +119,20 @@ function SettingRow({
     label,
     description,
     disabled = false,
+    isActive = false,
+    onClick,
 }: {
     icon: React.ReactNode
     label: string
     description?: string
     disabled?: boolean
+    isActive?: boolean
+    onClick?: () => void
 }) {
     return (
-        <div className={`flex items-center justify-between p-3.5 rounded-xl border transition-colors ${
+        <div 
+            onClick={!disabled ? onClick : undefined}
+            className={`flex items-center justify-between p-3.5 rounded-xl border transition-colors ${
             disabled
                 ? 'bg-gray-50/50 dark:bg-[#111113]/50 border-gray-100 dark:border-white/5 opacity-60 cursor-not-allowed'
                 : 'bg-white dark:bg-[#111113] border-gray-200 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 cursor-pointer'
@@ -131,7 +147,9 @@ function SettingRow({
                 </div>
             </div>
             {!disabled && (
-                <div className="w-8 h-4 bg-gray-200 dark:bg-zinc-700 rounded-full" />
+                <div className={`w-9 h-5 rounded-full p-0.5 transition-colors duration-200 ease-in-out flex ${isActive ? 'bg-purple-500 justify-end' : 'bg-gray-200 dark:bg-zinc-700 justify-start'}`}>
+                    <div className="w-4 h-4 bg-white rounded-full shadow-sm" />
+                </div>
             )}
         </div>
     )
