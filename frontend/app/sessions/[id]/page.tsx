@@ -5,12 +5,9 @@ import { io, Socket } from 'socket.io-client'
 import { useRouter, useParams } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { FileUploadModal } from '@/components/file-upload-modal'
-import { KnowledgeUploadModal, KnowledgeContentType } from '@/components/session/KnowledgeUploadModal'
-import { KnowledgeFileList } from '@/components/session/KnowledgeFileList'
+import { FileUploadModal, FileContentType } from '@/components/session/FileUploadModal'
 import { InvitePeerModal } from '@/components/session/InvitePeerModal'
 import { SettingsModal } from '@/components/session/SettingsModal'
-import { KnowledgeFile } from '@/components/session/KnowledgeFileItem'
 import { 
     Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
     TrendingDown, TrendingUp, Minus, Upload, RefreshCw, AlertTriangle, 
@@ -111,10 +108,8 @@ export default function SessionDetailPage() {
     const [activeUserIds, setActiveUserIds] = useState<number[]>([])
 
     // Knowledge files state
-    const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([])
+    const [knowledgeFiles, setKnowledgeFiles] = useState<any[]>([])
     const [knowledgeLoading, setKnowledgeLoading] = useState(true)
-    const [isKnowledgeModalOpen, setIsKnowledgeModalOpen] = useState(false)
-    const [knowledgeModalDefaultType, setKnowledgeModalDefaultType] = useState<KnowledgeContentType>('notes')
 
     // AI State
     const [question, setQuestion] = useState('')
@@ -388,7 +383,7 @@ export default function SessionDetailPage() {
         setFiles(files.filter((f) => f.id !== fileId))
     }
 
-    const handleKnowledgeUpload = async (file: File, contentType: KnowledgeContentType) => {
+    const handleKnowledgeUpload = async (file: File, contentType: FileContentType) => {
         const formData = new FormData()
         formData.append('file', file)
         formData.append('contentType', contentType)
@@ -407,14 +402,49 @@ export default function SessionDetailPage() {
         }
     }
 
-    const handleKnowledgeDelete = async (fileId: number) => {
-        if (!confirm('Remove this knowledge file from the session?')) return
+    const handleUnifiedUpload = async (file: File, contentType: FileContentType) => {
+        if (contentType === 'general') {
+            await handleUploadFile(file);
+        } else {
+            await handleKnowledgeUpload(file, contentType);
+        }
+    }
+
+    const handleUnifiedDelete = async (id: number | string, type: string) => {
+        if (!confirm('Remove this file from the session?')) return
         try {
-            await api.delete(`/session/${params.id}/knowledge/${fileId}`)
-            setKnowledgeFiles(prev => prev.filter(f => f.id !== fileId))
+            if (type === 'general') {
+                // Not perfectly implemented but keeping local arrays clean
+                handleDeleteFile(id as string)
+            } else {
+                await api.delete(`/session/${params.id}/knowledge/${id}`)
+                setKnowledgeFiles(prev => prev.filter(f => f.id !== id))
+            }
         } catch (err) {
-            console.error('Error deleting knowledge file:', err)
+            console.error('Error deleting file:', err)
             alert('Failed to delete. Please try again.')
+        }
+    }
+
+    const handleUnifiedDownload = async (id: number | string, type: string, fileName: string) => {
+        try {
+            let response;
+            if (type === 'general') {
+                response = await api.get(`/session/files/${id}/download`, { responseType: 'blob' })
+            } else {
+                response = await api.get(`/session/${params.id}/knowledge/${id}/download`, { responseType: 'blob' })
+            }
+            const url = window.URL.createObjectURL(new Blob([response.data]))
+            const link = document.createElement('a')
+            link.href = url
+            link.setAttribute('download', fileName)
+            document.body.appendChild(link)
+            link.click()
+            link.parentNode?.removeChild(link)
+            window.URL.revokeObjectURL(url)
+        } catch (error) {
+            console.error('Error downloading file:', error)
+            alert('Failed to download file. It might not be available on disk.')
         }
     }
 
@@ -757,7 +787,7 @@ export default function SessionDetailPage() {
                                         <BookOpen className="w-10 h-10 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                                         <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">No PYQs uploaded</h3>
                                         <p className="text-sm text-gray-500 mt-1.5 max-w-xs mx-auto">Upload Previous Year Question papers to generate exam predictions.</p>
-                                        <button onClick={() => { setKnowledgeModalDefaultType('pyqs'); setIsKnowledgeModalOpen(true); }} className="mt-5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">Upload PYQ Document</button>
+                                        <button onClick={() => { setIsUploadModalOpen(true); }} className="mt-5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors shadow-sm">Upload PYQ Document</button>
                                     </div>
                                 ) : (
                                     <div className="space-y-10">
@@ -951,56 +981,84 @@ export default function SessionDetailPage() {
                     {/* ── FILES VIEW ── */}
                     {activeView === 'files' && (
                         <div className="flex-1 overflow-y-auto p-6 lg:p-8">
-                            <div className="max-w-2xl mx-auto">
+                            <div className="max-w-3xl mx-auto">
                                 <div className="flex items-center justify-between mb-6">
                                     <div className="flex items-center gap-2">
-                                        <Folder className="w-5 h-5 text-teal-500" />
-                                        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Shared Resources</h2>
+                                        <Folder className="w-5 h-5 text-blue-500" />
+                                        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Session Files</h2>
                                     </div>
                                     <button
                                         onClick={() => setIsUploadModalOpen(true)}
-                                        className="flex items-center gap-1.5 text-sm font-semibold text-teal-600 dark:text-teal-400 hover:text-teal-700 transition-colors"
+                                        className="flex items-center gap-1.5 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 transition-colors"
                                     >
-                                        <Upload className="w-4 h-4" /> Upload File
+                                        <Upload className="w-4 h-4" /> Add File
                                     </button>
                                 </div>
-                                {files.length === 0 ? (
-                                    <div className="text-center py-16 text-gray-400">
+                                {files.length === 0 && knowledgeFiles.length === 0 ? (
+                                    <div className="text-center py-16 text-gray-400 border-2 border-dashed border-gray-100 dark:border-white/5 rounded-2xl">
                                         <FileText className="w-10 h-10 mx-auto mb-3 opacity-40" />
-                                        <p className="font-medium">No files uploaded yet.</p>
-                                        <p className="text-sm mt-1">Upload study materials to share with your session.</p>
+                                        <p className="font-medium text-gray-600 dark:text-gray-300">No files uploaded yet.</p>
+                                        <p className="text-sm mt-1 opacity-60">Upload study materials to share with peers or for the AI to process.</p>
+                                        <button onClick={() => setIsUploadModalOpen(true)} className="mt-4 px-4 py-2 border border-blue-500/30 text-blue-500 rounded-lg text-sm font-bold shadow-sm hover:bg-blue-500/5 transition">
+                                            Upload First File
+                                        </button>
                                     </div>
                                 ) : (
                                     <div className="space-y-2">
-                                        {files.map(file => (
+                                        {[
+                                            ...files.map(f => ({
+                                                id: `general-${f.id}`,
+                                                dbId: f.id,
+                                                type: 'general',
+                                                title: f.name,
+                                                created_at: f.uploadDate,
+                                                meta: f.size
+                                            })),
+                                            ...knowledgeFiles.map(f => ({
+                                                id: `ai-${f.id}`,
+                                                dbId: f.id,
+                                                type: f.content_type,
+                                                title: f.title,
+                                                created_at: f.created_at,
+                                                meta: `${f.chunk_count} chunks`
+                                            }))
+                                        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                                        .map(file => (
                                             <div key={file.id} className="flex items-center justify-between p-4 bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-xl hover:bg-gray-50 dark:hover:bg-white/5 transition-colors group">
                                                 <div className="flex items-center gap-4 overflow-hidden">
-                                                    <div className="w-10 h-10 rounded-lg bg-gray-100 dark:bg-zinc-800 flex items-center justify-center shrink-0">
-                                                        <FileText className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                                                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 border ${file.type === 'general' ? 'bg-teal-500/10 border-teal-500/20 text-teal-400' : 'bg-purple-500/10 border-purple-500/20 text-purple-400'}`}>
+                                                        {file.type === 'general' ? <Folder className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
                                                     </div>
                                                     <div className="min-w-0">
-                                                        <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{file.name}</p>
-                                                        <p className="text-xs text-gray-500 truncate">{file.size} · {formatDate(file.uploadDate)}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-bold text-gray-900 dark:text-gray-100 truncate">{file.title}</p>
+                                                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400 opacity-80 border border-gray-200 dark:border-white/10">
+                                                                {file.type}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 truncate mt-0.5">{file.meta} · {formatDate(file.created_at)}</p>
                                                     </div>
                                                 </div>
-                                                <button
-                                                    onClick={() => handleDownloadFile(file.id, file.name)}
-                                                    className="flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-gray-900 dark:hover:text-white opacity-0 group-hover:opacity-100 transition-all shrink-0 ml-4"
-                                                >
-                                                    <Download className="w-4 h-4" /> Download
-                                                </button>
+                                                <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all shrink-0 ml-4 gap-2">
+                                                    <button
+                                                        onClick={() => handleUnifiedDownload(file.dbId, file.type, file.title)}
+                                                        className="flex flex-col items-center justify-center w-8 h-8 rounded text-gray-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-all"
+                                                        title="Download"
+                                                    >
+                                                        <Download className="w-4 h-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleUnifiedDelete(file.dbId, file.type)}
+                                                        className="flex flex-col items-center justify-center w-8 h-8 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all"
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         ))}
                                     </div>
                                 )}
-
-                                {/* ── KNOWLEDGE BASE ── */}
-                                <KnowledgeFileList
-                                    files={knowledgeFiles}
-                                    loading={knowledgeLoading}
-                                    onAddClick={() => setIsKnowledgeModalOpen(true)}
-                                    onDelete={handleKnowledgeDelete}
-                                />
                             </div>
                         </div>
                     )}
@@ -1334,12 +1392,6 @@ export default function SessionDetailPage() {
                 subject={session.subject}
                 onLeaveSession={handleLeaveSession}
                 onLogout={handleLogout}
-            />
-            <KnowledgeUploadModal
-                isOpen={isKnowledgeModalOpen}
-                onClose={() => setIsKnowledgeModalOpen(false)}
-                onUpload={handleKnowledgeUpload}
-                defaultContentType={knowledgeModalDefaultType}
             />
         </div>
     )

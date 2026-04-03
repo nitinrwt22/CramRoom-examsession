@@ -116,6 +116,8 @@ router.get('/files/:fileId/download', async (req: AuthRequest, res) => {
 // KNOWLEDGE FILE ROUTES (.md upload + parse)
 // ─────────────────────────────────────────────
 
+import path from 'path';
+
 // POST /session/:id/knowledge — upload + parse + chunk a .md knowledge file
 router.post('/:id/knowledge', memoryUpload.single('file'), async (req: AuthRequest, res) => {
     try {
@@ -133,12 +135,17 @@ router.post('/:id/knowledge', memoryUpload.single('file'), async (req: AuthReque
             return;
         }
 
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+        const ext = path.extname(file.originalname);
+        const storedFileName = uniqueSuffix + ext;
+
         const result = await knowledgeService.processKnowledgeUpload(
             sessionId,
             userId,
             file.buffer,
             file.originalname,
-            contentType
+            contentType,
+            storedFileName
         );
         res.status(201).json(result);
     } catch (error: any) {
@@ -192,6 +199,32 @@ router.delete('/:id/knowledge/:fileId', async (req: AuthRequest, res) => {
             error.message === 'Knowledge file not found in this session' ? 404
             : error.message === 'Unauthorized' ? 403
             : 500;
+        res.status(status).json({ error: error.message });
+    }
+});
+
+// GET /session/:id/knowledge/:fileId/download
+router.get('/:id/knowledge/:fileId/download', async (req: AuthRequest, res) => {
+    try {
+        const sessionId = parseInt(req.params.id);
+        const fileId = parseInt(req.params.fileId);
+        const userId = req.user.id;
+
+        if (isNaN(sessionId) || isNaN(fileId)) {
+            res.status(400).json({ error: 'Invalid session or file ID' });
+            return;
+        }
+
+        const { absolutePath, mimeType, originalName } = await knowledgeService.downloadKnowledgeFile(fileId, sessionId, userId);
+
+        res.setHeader('Content-Disposition', `attachment; filename="${originalName}"`);
+        res.setHeader('Content-Type', mimeType);
+
+        res.sendFile(absolutePath);
+    } catch (error: any) {
+        console.error(`Error in GET /session/:id/knowledge/:fileId/download:`, error);
+        const status = error.message.includes('not found') ? 404 :
+            error.message.includes('participant') ? 403 : 500;
         res.status(status).json({ error: error.message });
     }
 });

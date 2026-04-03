@@ -1,6 +1,8 @@
 import matter from 'gray-matter';
 import pool from '../config/database';
 import { detectFileType, extractText, normaliseToMarkdown } from '../utils/fileConverter.util';
+import fs from 'fs';
+import path from 'path';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -135,7 +137,8 @@ export const processKnowledgeUpload = async (
     userId: number,
     fileBuffer: Buffer,
     originalName: string,
-    userContentType?: string
+    userContentType?: string,
+    storedFileName?: string
 ): Promise<KnowledgeUploadResult> => {
     const client = await pool.connect();
 
@@ -196,12 +199,21 @@ export const processKnowledgeUpload = async (
             'notes'
         ) as KnowledgeContentType;
 
+        // Save file to disk if storedFileName is provided
+        if (storedFileName) {
+            const uploadPath = path.join(process.cwd(), 'uploads/knowledge');
+            if (!fs.existsSync(uploadPath)) {
+                fs.mkdirSync(uploadPath, { recursive: true });
+            }
+            fs.writeFileSync(path.join(uploadPath, storedFileName), fileBuffer);
+        }
+
         // 4. Insert file record into `files` table
         const fileInsert = await client.query(
             `INSERT INTO files (file_name, file_type, file_url, title, topic, content_type)
              VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING id`,
-            [originalName, mimeTypeMap[fileType], 'knowledge', title, topic, resolvedType]
+            [originalName, mimeTypeMap[fileType], storedFileName || 'knowledge', title, topic, resolvedType]
         );
         const fileId: number = fileInsert.rows[0].id;
 
@@ -280,8 +292,8 @@ export const getKnowledgeFiles = async (sessionId: number, userId: number) => {
             COUNT(sac.id)::int AS chunk_count,
             MIN(sac.created_at) AS created_at
          FROM files f
-         JOIN session_ai_chunks sac ON sac.file_id = f.id
-         WHERE sac.session_id = $1
+         LEFT JOIN session_ai_chunks sac ON sac.file_id = f.id
+         WHERE (sac.session_id = $1 OR f.id IN (SELECT file_id FROM session_ai_chunks WHERE session_id = $1))
            AND sac.file_id IS NOT NULL
            AND sac.chunk_text IS NOT NULL
          GROUP BY f.id, f.title, f.topic, f.content_type
@@ -304,6 +316,13 @@ export const deleteKnowledgeFile = async (fileId: number, sessionId: number, use
     try {
         await client.query('BEGIN');
 
+        // Fetch file URL before deleting to remove from disk
+        const fileRecordResult = await client.query(
+            `SELECT file_url FROM files WHERE id = $1`,
+            [fileId]
+        );
+        const fileUrl = fileRecordResult.rows.length > 0 ? fileRecordResult.rows[0].file_url : null;
+        
         // Verify file exists and is linked to this session
         const chunkCheck = await client.query(
             `SELECT 1 FROM session_ai_chunks WHERE file_id = $1 AND session_id = $2 LIMIT 1`,
@@ -330,6 +349,19 @@ export const deleteKnowledgeFile = async (fileId: number, sessionId: number, use
         await client.query(`DELETE FROM files WHERE id = $1`, [fileId]);
 
         await client.query('COMMIT');
+
+        // Delete from disk if we have a stored file URL
+        if (fileUrl && fileUrl !== 'knowledge') {
+            const filePath = path.join(process.cwd(), 'uploads/knowledge', fileUrl);
+            try {
+                if (fs.existsSync(filePath)) {
+                    fs.unlinkSync(filePath);
+                }
+            } catch (fsError) {
+                console.error(`Failed to delete file from disk: ${filePath}`, fsError);
+            }
+        }
+
         return { message: 'Knowledge file deleted successfully' };
     } catch (error) {
         await client.query('ROLLBACK');
@@ -337,4 +369,46 @@ export const deleteKnowledgeFile = async (fileId: number, sessionId: number, use
     } finally {
         client.release();
     }
+};
+
+// ---------------------------------------------------------------------------
+// Download a knowledge file
+// ---------------------------------------------------------------------------
+
+export const downloadKnowledgeFile = async (fileId: number, sessionId: number, userId: number) => {
+    // 1. Verify file exists
+    const fileResult = await pool.query('SELECT * FROM files WHERE id = $1', [fileId]);
+
+    if (fileResult.rows.length === 0) {
+        throw new Error('File not found');
+    }
+
+    const file = fileResult.rows[0];
+
+    // 2. Verify user is a participant
+    const participantResult = await pool.query(
+        'SELECT 1 FROM participants WHERE session_id = $1 AND user_id = $2',
+        [sessionId, userId]
+    );
+
+    if (participantResult.rows.length === 0) {
+        throw new Error('User is not a participant in this session');
+    }
+
+    // 3. Verify file exists on disk
+    if (!file.file_url || file.file_url === 'knowledge') {
+        throw new Error('This file was not saved globally and cannot be downloaded.');
+    }
+
+    const absolutePath = path.join(process.cwd(), 'uploads/knowledge', file.file_url);
+
+    if (!fs.existsSync(absolutePath)) {
+        throw new Error('File not found on disk');
+    }
+
+    return {
+        absolutePath,
+        mimeType: file.file_type,
+        originalName: file.file_name,
+    };
 };

@@ -5,7 +5,8 @@ import { X, Upload, CheckCircle, Loader2, FileText, BookOpen, ClipboardList, Lin
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type KnowledgeContentType =
+export type FileContentType =
+    | 'general'
     | 'notes'
     | 'pyqs'
     | 'assignments'
@@ -13,44 +14,51 @@ export type KnowledgeContentType =
     | 'cheatsheets'
 
 const CONTENT_TYPES: {
-    value: KnowledgeContentType
+    value: FileContentType
     label: string
     desc: string
     icon: React.ReactNode
     color: string
 }[] = [
     {
+        value: 'general',
+        label: 'Shared',
+        desc: 'General files for peers',
+        icon: <File className="w-4 h-4" />,
+        color: 'bg-teal-500/15 text-teal-500 border-teal-500/30',
+    },
+    {
         value: 'notes',
         label: 'Notes',
-        desc: 'Concept notes, theory, summaries',
+        desc: 'Concept theory (AI)',
         icon: <BookOpen className="w-4 h-4" />,
         color: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
     },
     {
         value: 'pyqs',
         label: 'PYQs',
-        desc: 'Previous year questions, practice papers',
+        desc: 'Practice papers (AI)',
         icon: <FileText className="w-4 h-4" />,
         color: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
     },
     {
         value: 'assignments',
-        label: 'Assignments',
-        desc: 'Lab tasks, problem sets',
+        label: 'Tasks',
+        desc: 'Problem sets (AI)',
         icon: <ClipboardList className="w-4 h-4" />,
         color: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
     },
     {
         value: 'references',
-        label: 'References',
-        desc: 'Book excerpts, articles, links',
+        label: 'Links',
+        desc: 'Book excerpts (AI)',
         icon: <Link className="w-4 h-4" />,
         color: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30',
     },
     {
         value: 'cheatsheets',
         label: 'Cheatsheet',
-        desc: 'Formulas, syntax quick-refs',
+        desc: 'Formulas (AI)',
         icon: <FileCode className="w-4 h-4" />,
         color: 'bg-rose-500/15 text-rose-400 border-rose-500/30',
     },
@@ -58,18 +66,18 @@ const CONTENT_TYPES: {
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
-interface KnowledgeUploadModalProps {
+interface FileUploadModalProps {
     isOpen: boolean
     onClose: () => void
-    onUpload: (file: File, contentType: KnowledgeContentType) => Promise<void>
-    defaultContentType?: KnowledgeContentType
+    onUpload: (file: File, contentType: FileContentType) => Promise<void>
+    defaultContentType?: FileContentType
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContentType = 'notes' }: KnowledgeUploadModalProps) {
+export function FileUploadModal({ isOpen, onClose, onUpload, defaultContentType = 'notes' }: FileUploadModalProps) {
     const [selectedFile, setSelectedFile] = useState<File | null>(null)
-    const [contentType, setContentType] = useState<KnowledgeContentType>(defaultContentType)
+    const [contentType, setContentType] = useState<FileContentType>(defaultContentType)
     const [isDragging, setIsDragging] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [error, setError] = useState<string | null>(null)
@@ -83,7 +91,8 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
 
     if (!isOpen) return null
 
-    const ACCEPTED_EXTENSIONS = ['.md', '.pdf', '.docx']
+    const ACCEPTED_AI_EXTENSIONS = ['.md', '.pdf', '.docx']
+    const isAiType = contentType !== 'general';
 
     const getFileIcon = (fileName: string) => {
         if (fileName.endsWith('.pdf')) return <FileText className="w-5 h-5 text-red-400" />
@@ -93,8 +102,8 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
 
     const handleFile = (file: File) => {
         const name = file.name.toLowerCase()
-        if (!ACCEPTED_EXTENSIONS.some(ext => name.endsWith(ext))) {
-            setError('Only .md, .pdf, and .docx files are supported.')
+        if (isAiType && !ACCEPTED_AI_EXTENSIONS.some(ext => name.endsWith(ext))) {
+            setError('Only .md, .pdf, and .docx files are supported for AI processing.')
             return
         }
         setError(null)
@@ -138,8 +147,8 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                 {/* Header */}
                 <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100 dark:border-white/8">
                     <div>
-                        <h2 className="text-base font-bold text-gray-900 dark:text-white">Add Knowledge File</h2>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Upload a .md, .pdf, or .docx — AI will use it as context</p>
+                        <h2 className="text-base font-bold text-gray-900 dark:text-white">Upload File</h2>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Share with peers or upload context for the AI</p>
                     </div>
                     <button
                         onClick={handleClose}
@@ -179,7 +188,7 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                     {/* Step 2: File drop zone */}
                     <div>
                         <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
-                            2 — Upload your file (.md, .pdf, or .docx)
+                            2 — Upload your file
                         </p>
                         <div
                             onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
@@ -211,7 +220,13 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                                     </div>
                                     <div className="text-center">
                                         <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Drop your file here</p>
-                                        <p className="text-xs text-gray-400 mt-0.5">Supports <span className="font-bold text-gray-500 dark:text-gray-300">.md</span>, <span className="font-bold text-gray-500 dark:text-gray-300">.pdf</span>, <span className="font-bold text-gray-500 dark:text-gray-300">.docx</span> · or click to browse</p>
+                                        <p className="text-xs text-gray-400 mt-0.5">
+                                            {isAiType ? (
+                                                <>Supports <span className="font-bold text-gray-500 dark:text-gray-300">.md</span>, <span className="font-bold text-gray-500 dark:text-gray-300">.pdf</span>, <span className="font-bold text-gray-500 dark:text-gray-300">.docx</span></>
+                                            ) : (
+                                                <>Any file type supported</>
+                                            )} · or click to browse
+                                        </p>
                                     </div>
                                 </>
                             )}
@@ -219,7 +234,7 @@ export function KnowledgeUploadModal({ isOpen, onClose, onUpload, defaultContent
                         <input
                             ref={inputRef}
                             type="file"
-                            accept=".md,.pdf,.docx"
+                            accept={isAiType ? ".md,.pdf,.docx" : "*"}
                             className="hidden"
                             onChange={(e) => {
                                 const f = e.currentTarget.files?.[0]
