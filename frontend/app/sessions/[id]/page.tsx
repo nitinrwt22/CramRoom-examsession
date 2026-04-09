@@ -63,6 +63,11 @@ interface ProgressItem {
     trend: 'improving' | 'worsening' | 'stable' | 'insufficient_data'
 }
 
+interface TypingUser {
+    user_id: number;
+    name: string;
+}
+
 interface ChatMessage {
     id?: number
     room_id: number
@@ -111,6 +116,8 @@ export default function SessionDetailPage() {
     const chatEndRef = useRef<HTMLDivElement>(null)
     const [currentUser, setCurrentUser] = useState<{ id: number, name: string } | null>(null)
     const [activeUserIds, setActiveUserIds] = useState<number[]>([])
+    const [typingUsers, setTypingUsers] = useState<TypingUser[]>([])
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     // Knowledge files state
     const [knowledgeFiles, setKnowledgeFiles] = useState<any[]>([])
@@ -316,6 +323,19 @@ export default function SessionDetailPage() {
                 activeSocket.on('active_users', (userIds: number[]) => {
                     setActiveUserIds(userIds)
                 })
+
+                activeSocket.on('typing_start', (data: { room_id: number, user_id: number, username: string }) => {
+                    setTypingUsers(prev => {
+                        if (!prev.find(u => u.user_id === data.user_id)) {
+                            return [...prev, { user_id: data.user_id, name: data.username }];
+                        }
+                        return prev;
+                    });
+                })
+
+                activeSocket.on('typing_stop', (data: { room_id: number, user_id: number }) => {
+                    setTypingUsers(prev => prev.filter(u => u.user_id !== data.user_id));
+                })
             }
 
             initChat()
@@ -348,6 +368,8 @@ export default function SessionDetailPage() {
         })
         setChatInput('')
         setShowTagSuggestions(false)
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current)
+        socketRef.current.emit('typing_stop', { room_id: parseInt(params.id), user_id: currentUser.id })
     }
 
     const handleUploadFile = async (file: File) => {
@@ -1166,6 +1188,15 @@ export default function SessionDetailPage() {
 
                                 {/* Sticky Message Input */}
                                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-transparent dark:from-[#141416] dark:via-[#141416] z-10 w-full pointer-events-none">
+                                    {typingUsers.length > 0 && (
+                                        <div className="max-w-4xl mx-auto pl-4 mb-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                            <p className="text-[11px] text-gray-500 italic font-medium">
+                                                {typingUsers.length === 1 ? `${typingUsers[0].name} is typing...` : 
+                                                 typingUsers.length === 2 ? `${typingUsers[0].name} and ${typingUsers[1].name} are typing...` : 
+                                                 'Multiple members are typing...'}
+                                            </p>
+                                        </div>
+                                    )}
                                     <div className="max-w-4xl mx-auto relative group pointer-events-auto">
                                         <div className="absolute inset-0 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-xl transition-all group-focus-within:bg-blue-500/10 dark:group-focus-within:bg-blue-500/20"></div>
                                         
@@ -1224,8 +1255,28 @@ export default function SessionDetailPage() {
                                                 onChange={e => {
                                                     const val = e.target.value;
                                                     setChatInput(val);
+                                                    
+                                                    // Typing Indicator logic
+                                                    if (socketRef.current && currentUser && params.id) {
+                                                        socketRef.current.emit('typing_start', {
+                                                            room_id: parseInt(params.id),
+                                                            user_id: currentUser.id,
+                                                            username: currentUser.name
+                                                        });
+                                                        if (typingTimeoutRef.current) {
+                                                            clearTimeout(typingTimeoutRef.current);
+                                                        }
+                                                        typingTimeoutRef.current = setTimeout(() => {
+                                                            socketRef.current?.emit('typing_stop', {
+                                                                room_id: parseInt(params.id),
+                                                                user_id: currentUser.id
+                                                            });
+                                                        }, 1500);
+                                                    }
+
+                                                    // Tag Suggestion logic
                                                     const words = val.split(' ');
-                                                    const lastWord = words[words.length - 1];
+                                                    const lastWord = words[words.length - 1] || '';
                                                     if (lastWord.startsWith('#')) {
                                                         setTagSearchTerm(lastWord.substring(1).toUpperCase());
                                                         setShowTagSuggestions(true);

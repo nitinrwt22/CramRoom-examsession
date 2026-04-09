@@ -57,6 +57,17 @@ export const setupChatSocket = (io: Server) => {
             }
         });
 
+        // Typing events
+        socket.on('typing_start', (data: { room_id: number; user_id: number; username: string }) => {
+            const roomStr = `room_${data.room_id}`;
+            socket.to(roomStr).emit('typing_start', data);
+        });
+
+        socket.on('typing_stop', (data: { room_id: number; user_id: number }) => {
+            const roomStr = `room_${data.room_id}`;
+            socket.to(roomStr).emit('typing_stop', data);
+        });
+
         // Disconnect event
         socket.on('disconnect', async () => {
              console.log(`[Socket] User disconnected: ${socket.id}`);
