@@ -69,6 +69,7 @@ interface TypingUser {
 }
 
 interface ChatMessage {
+    message_id?: number
     id?: number
     room_id: number
     user_id: number
@@ -76,6 +77,7 @@ interface ChatMessage {
     message_text: string
     timestamp?: string
     tags?: string[]
+    reactions?: Record<string, number[]>
 }
 
 export default function SessionDetailPage() {
@@ -118,6 +120,8 @@ export default function SessionDetailPage() {
     const [activeUserIds, setActiveUserIds] = useState<number[]>([])
     const [typingUsers, setTypingUsers] = useState<TypingUser[]>([])
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+    const [reactionPickerMsgId, setReactionPickerMsgId] = useState<number | null>(null)
+    const REACTION_EMOJIS = ['👍', '🔥', '❓', '✅', '💡']
 
     // Knowledge files state
     const [knowledgeFiles, setKnowledgeFiles] = useState<any[]>([])
@@ -336,6 +340,12 @@ export default function SessionDetailPage() {
                 activeSocket.on('typing_stop', (data: { room_id: number, user_id: number }) => {
                     setTypingUsers(prev => prev.filter(u => u.user_id !== data.user_id));
                 })
+
+                activeSocket.on('reaction_update', ({ message_id, reactions }: { message_id: number, reactions: Record<string, number[]> }) => {
+                    setChatMessages(prev => prev.map(msg => 
+                        (msg.message_id || msg.id) === message_id ? { ...msg, reactions } : msg
+                    ));
+                })
             }
 
             initChat()
@@ -354,6 +364,26 @@ export default function SessionDetailPage() {
             }, 100)
         }
     }, [chatMessages.length, activeView])
+
+    const handleReaction = (messageId: number, emoji: string) => {
+        console.log(`[Frontend] handleReaction invoked for msg ${messageId} with emoji ${emoji}`);
+        if (!socketRef.current) console.error('[Frontend] Missing socketRef');
+        if (!currentUser) console.error('[Frontend] Missing currentUser');
+        if (!params.id) console.error('[Frontend] Missing params.id');
+        
+        if (!socketRef.current || !currentUser || !params.id) return;
+        const msg = chatMessages.find(m => (m.message_id || m.id) === messageId);
+        const hasReacted = msg?.reactions?.[emoji]?.includes(currentUser.id);
+        
+        console.log(`[Frontend] Submitting reaction. msgFound=${!!msg}, hasReacted=${hasReacted}, user=${currentUser.id}`);
+        socketRef.current.emit(hasReacted ? 'remove_reaction' : 'add_reaction', {
+            message_id: messageId,
+            room_id: parseInt(params.id as string),
+            user_id: currentUser.id,
+            emoji
+        });
+        setReactionPickerMsgId(null);
+    }
 
     const handleSendChatMessage = (e?: React.FormEvent) => {
         if (e) e.preventDefault()
@@ -1159,24 +1189,74 @@ export default function SessionDetailPage() {
                                     ) : (
                                         filteredMessages.map((msg, idx) => {
                                             const isMe = msg.user_id === currentUser?.id;
+                                            const msgId = msg.message_id || msg.id;
                                             return (
-                                                <div key={msg.id || idx} className={`flex flex-col gap-1.5 ${isMe ? 'items-end' : 'items-start'}`}>
-                                                    <div className={`flex items-end gap-3 max-w-[85%] ${isMe ? 'flex-row-reverse' : ''}`}>
+                                                <div key={msgId || idx} className={`flex flex-col gap-1.5 ${isMe ? 'items-end' : 'items-start'} group relative`}>
+                                                    <div className={`flex items-end gap-3 max-w-[85%] relative ${isMe ? 'flex-row-reverse' : ''}`}>
                                                         <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${isMe ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-gray-300'}`}>
                                                             {msg.username.substring(0, 2).toUpperCase()}
                                                         </div>
-                                                        <div className={`flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'}`}>
+                                                        <div className={`flex flex-col gap-1 ${isMe ? 'items-end' : 'items-start'} relative`}>
                                                             <div className={`text-[11px] font-semibold text-gray-500 flex items-center gap-2 ${isMe ? 'flex-row-reverse mr-1' : 'ml-1'}`}>
                                                                 <span>{isMe ? 'You' : msg.username}</span>
                                                                 <span className="font-normal opacity-60">{formatTime(msg.timestamp || new Date().toISOString())}</span>
                                                             </div>
-                                                            <div className={`p-3.5 sm:p-4 text-[14px] leading-relaxed shadow-sm ${
+                                                            <div className={`p-3.5 sm:p-4 text-[14px] leading-relaxed shadow-sm relative ${
                                                                 isMe 
                                                                 ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm' 
                                                                 : 'bg-gray-100 dark:bg-[#1A1A1C] border border-gray-200/50 dark:border-white/5 text-gray-800 dark:text-gray-200 rounded-2xl rounded-bl-sm'
                                                             }`}>
                                                                 {renderMessageText(msg.message_text, isMe)}
+
+                                                                {/* Hover Reaction Button */}
+                                                                {msgId && (
+                                                                    <div className={`absolute top-1/2 -translate-y-1/2 ${isMe ? '-left-10' : '-right-10'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                                                                        <button 
+                                                                            onClick={() => setReactionPickerMsgId(reactionPickerMsgId === msgId ? null : (msgId as number))}
+                                                                            className="w-7 h-7 bg-white dark:bg-[#2A2A2C] border border-gray-200 dark:border-zinc-700 rounded-full flex items-center justify-center shadow-sm text-gray-400 hover:text-blue-500 hover:scale-110 transition-all z-10"
+                                                                        >
+                                                                            <Smile className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                        
+                                                                        {reactionPickerMsgId === msgId && (
+                                                                            <div className={`absolute top-full mt-2 ${isMe ? 'right-0' : 'left-0'} z-50 bg-white dark:bg-[#2A2A2C] border border-gray-200 dark:border-zinc-700 rounded-full shadow-lg p-1.5 flex gap-1 animate-in fade-in zoom-in-95 duration-150`}>
+                                                                                {REACTION_EMOJIS.map(emoji => (
+                                                                                    <button 
+                                                                                        key={emoji}
+                                                                                        onClick={() => handleReaction(msgId as number, emoji)}
+                                                                                        className="w-7 h-7 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 rounded-full transition-colors text-lg"
+                                                                                    >
+                                                                                        {emoji}
+                                                                                    </button>
+                                                                                ))}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </div>
+                                                            {/* Render Existing Reactions */}
+                                                            {msg.reactions && Object.entries(msg.reactions).length > 0 && (
+                                                                <div className={`flex flex-wrap gap-1 mt-0.5 ${isMe ? 'justify-end' : 'justify-start'}`}>
+                                                                    {Object.entries(msg.reactions).map(([emoji, userIds]) => {
+                                                                        if (userIds.length === 0) return null;
+                                                                        const hasReacted = currentUser && userIds.includes(currentUser.id);
+                                                                        return (
+                                                                            <button 
+                                                                                key={emoji}
+                                                                                onClick={() => msgId && handleReaction(msgId as number, emoji)}
+                                                                                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold transition-all ${
+                                                                                    hasReacted 
+                                                                                    ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-400 ring-1 ring-blue-500/30' 
+                                                                                    : 'bg-gray-100 dark:bg-[#2A2A2C] border border-gray-200/50 dark:border-zinc-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-[#343436]'
+                                                                                }`}
+                                                                            >
+                                                                                <span>{emoji}</span>
+                                                                                <span>{userIds.length}</span>
+                                                                            </button>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     </div>
                                                 </div>

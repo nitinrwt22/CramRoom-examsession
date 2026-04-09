@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { saveMessage } from '../models/messageModel';
+import { saveMessage, updateReaction } from '../models/messageModel';
 
 export const setupChatSocket = (io: Server) => {
     io.on('connection', (socket: Socket) => {
@@ -66,6 +66,29 @@ export const setupChatSocket = (io: Server) => {
         socket.on('typing_stop', (data: { room_id: number; user_id: number }) => {
             const roomStr = `room_${data.room_id}`;
             socket.to(roomStr).emit('typing_stop', data);
+        });
+
+        // Reaction events
+        socket.on('add_reaction', async (data: { message_id: number; room_id: number; user_id: number; emoji: string }) => {
+            console.log('[Socket] Received add_reaction:', data);
+            try {
+                const { message_id, room_id, user_id, emoji } = data;
+                const updatedReactions = await updateReaction(message_id, emoji, user_id, 'add');
+                console.log('[Socket] Broadcasting updated reactions:', updatedReactions);
+                io.in(`room_${room_id}`).emit('reaction_update', { message_id, reactions: updatedReactions });
+            } catch (error) {
+                console.error('[Socket] Error adding reaction:', error);
+            }
+        });
+
+        socket.on('remove_reaction', async (data: { message_id: number; room_id: number; user_id: number; emoji: string }) => {
+            try {
+                const { message_id, room_id, user_id, emoji } = data;
+                const updatedReactions = await updateReaction(message_id, emoji, user_id, 'remove');
+                io.in(`room_${room_id}`).emit('reaction_update', { message_id, reactions: updatedReactions });
+            } catch (error) {
+                console.error('[Socket] Error removing reaction:', error);
+            }
         });
 
         // Disconnect event
