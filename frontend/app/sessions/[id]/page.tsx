@@ -70,6 +70,7 @@ interface ChatMessage {
     username: string
     message_text: string
     timestamp?: string
+    tags?: string[]
 }
 
 export default function SessionDetailPage() {
@@ -102,6 +103,10 @@ export default function SessionDetailPage() {
     const [chatInput, setChatInput] = useState('')
     const [chatLoading, setChatLoading] = useState(false)
     const [showEmojiPicker, setShowEmojiPicker] = useState(false)
+    const [tagFilter, setTagFilter] = useState<string | null>(null)
+    const [showTagSuggestions, setShowTagSuggestions] = useState(false)
+    const [tagSearchTerm, setTagSearchTerm] = useState('')
+    const COMMON_TAGS = ['DSA', 'DBMS', 'OS', 'CN', 'OOPS', 'JAVA', 'PYTHON', 'AI']
     const socketRef = useRef<Socket | null>(null)
     const chatEndRef = useRef<HTMLDivElement>(null)
     const [currentUser, setCurrentUser] = useState<{ id: number, name: string } | null>(null)
@@ -342,6 +347,7 @@ export default function SessionDetailPage() {
             timestamp: new Date().toISOString()
         })
         setChatInput('')
+        setShowTagSuggestions(false)
     }
 
     const handleUploadFile = async (file: File) => {
@@ -1064,35 +1070,72 @@ export default function SessionDetailPage() {
                     )}
 
                     {/* ── LIVE CHAT VIEW ── */}
-                    {activeView === 'chat' && (
-                        <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-[#141416]">
-                            <div className="border-b border-gray-100 dark:border-white/5 px-6 py-3 shrink-0 flex items-center justify-between">
-                                <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
-                                    <span>Rooms</span>
-                                    <ChevronRight className="w-3.5 h-3.5" />
-                                    <span className="text-blue-600 dark:text-blue-500 font-bold border-b-2 border-blue-600 pb-1 -mb-[13px]">{session?.subject || 'Session'} Live Chat</span>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <span className="flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full text-[11px] font-bold text-green-700 dark:text-green-400 uppercase tracking-widest">
-                                        <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
-                                        Connected
-                                    </span>
-                                </div>
-                            </div>
+                    {activeView === 'chat' && (() => {
+                        const availableTags = Array.from(new Set(chatMessages.flatMap(m => m.tags || [])));
+                        const filteredMessages = tagFilter 
+                            ? chatMessages.filter(m => m.tags?.includes(tagFilter) || m.message_text.includes(`#${tagFilter}`)) 
+                            : chatMessages;
+                        
+                        const renderMessageText = (text: string, isMe: boolean) => {
+                            const parts = text.split(/(#\w+)/g);
+                            return parts.map((part, i) => {
+                                if (part.startsWith('#')) {
+                                    const tag = part.substring(1);
+                                    return <button key={i} onClick={() => setTagFilter(tag)} className={`inline-block font-semibold text-xs px-1.5 py-0.5 rounded ml-1 mr-1 transition-colors ${isMe ? 'bg-white/20 text-white hover:bg-white/30' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-800/60'}`}>{part}</button>;
+                                }
+                                return <span key={i}>{part}</span>;
+                            });
+                        }
 
-                            <section className="flex-1 flex flex-col overflow-hidden relative">
-                                <div className="flex-1 overflow-y-auto px-6 py-8 space-y-6 scroll-smooth pb-32">
+                        return (
+                            <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-[#141416]">
+                                <div className="border-b border-gray-100 dark:border-white/5 px-6 py-3 shrink-0 flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 text-xs">
+                                        <span>Rooms</span>
+                                        <ChevronRight className="w-3.5 h-3.5" />
+                                        <span className="text-blue-600 dark:text-blue-500 font-bold border-b-2 border-blue-600 pb-1 -mb-[13px]">{session?.subject || 'Session'} Live Chat</span>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <span className="flex items-center gap-1.5 px-3 py-1 bg-green-50 dark:bg-green-900/20 rounded-full text-[11px] font-bold text-green-700 dark:text-green-400 uppercase tracking-widest">
+                                            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></span>
+                                            Connected
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {availableTags.length > 0 && (
+                                    <div className="px-6 py-2.5 border-b border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-[#1A1A1C]/50 flex items-center gap-2 overflow-x-auto no-scrollbar shrink-0">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">Filter:</span>
+                                        {availableTags.map(tag => (
+                                            <button 
+                                                key={tag} 
+                                                onClick={() => setTagFilter(tag === tagFilter ? null : tag)} 
+                                                className={`text-[11px] font-bold px-2.5 py-1 rounded-md whitespace-nowrap transition-colors ${tag === tagFilter ? 'bg-blue-600 text-white shadow-sm' : 'bg-gray-200 dark:bg-zinc-800 text-gray-600 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-zinc-700'}`}
+                                            >
+                                                #{tag}
+                                            </button>
+                                        ))}
+                                        {tagFilter && (
+                                            <button onClick={() => setTagFilter(null)} className="text-[11px] font-bold text-red-500 hover:text-red-600 ml-2 whitespace-nowrap">
+                                                Clear Filter
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
+                                <section className="flex-1 flex flex-col overflow-hidden relative">
+                                    <div className="flex-1 overflow-y-auto px-6 py-8 space-y-6 scroll-smooth pb-32">
                                     {chatLoading ? (
                                         <div className="flex justify-center items-center h-full text-gray-400">
                                             <Loader2 className="w-6 h-6 animate-spin mr-2" /> Loading chat...
                                         </div>
-                                    ) : chatMessages.length === 0 ? (
+                                    ) : filteredMessages.length === 0 ? (
                                         <div className="flex flex-col items-center justify-center h-full text-gray-400 opacity-60">
                                             <MessageSquare className="w-10 h-10 mb-3" />
                                             <p className="font-medium text-sm">No messages yet.</p>
                                         </div>
                                     ) : (
-                                        chatMessages.map((msg, idx) => {
+                                        filteredMessages.map((msg, idx) => {
                                             const isMe = msg.user_id === currentUser?.id;
                                             return (
                                                 <div key={msg.id || idx} className={`flex flex-col gap-1.5 ${isMe ? 'items-end' : 'items-start'}`}>
@@ -1110,7 +1153,7 @@ export default function SessionDetailPage() {
                                                                 ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm' 
                                                                 : 'bg-gray-100 dark:bg-[#1A1A1C] border border-gray-200/50 dark:border-white/5 text-gray-800 dark:text-gray-200 rounded-2xl rounded-bl-sm'
                                                             }`}>
-                                                                {msg.message_text}
+                                                                {renderMessageText(msg.message_text, isMe)}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1125,6 +1168,33 @@ export default function SessionDetailPage() {
                                 <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-white via-white to-transparent dark:from-[#141416] dark:via-[#141416] z-10 w-full pointer-events-none">
                                     <div className="max-w-4xl mx-auto relative group pointer-events-auto">
                                         <div className="absolute inset-0 bg-blue-500/5 dark:bg-blue-500/10 rounded-full blur-xl transition-all group-focus-within:bg-blue-500/10 dark:group-focus-within:bg-blue-500/20"></div>
+                                        
+                                        {showTagSuggestions && (
+                                            <div className="absolute bottom-full left-12 mb-4 z-50 shadow-2xl rounded-xl bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-zinc-800 w-48 overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200">
+                                                <div className="px-3 py-2 bg-gray-50 dark:bg-white/5 border-b border-gray-100 dark:border-white/5">
+                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Suggested Tags</span>
+                                                </div>
+                                                <div className="max-h-48 overflow-y-auto">
+                                                    {COMMON_TAGS.filter(t => t.includes(tagSearchTerm)).length === 0 && (
+                                                        <div className="px-4 py-3 text-xs text-gray-500 text-center">No matching tags</div>
+                                                    )}
+                                                    {COMMON_TAGS.filter(t => t.includes(tagSearchTerm)).map(tag => (
+                                                        <button
+                                                            key={tag}
+                                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors"
+                                                            onClick={() => {
+                                                                const words = chatInput.split(' ');
+                                                                words.pop();
+                                                                setChatInput([...words, `#${tag} `].join(' '));
+                                                                setShowTagSuggestions(false);
+                                                            }}
+                                                        >
+                                                            <span className="text-blue-500 font-bold mr-1">#</span>{tag}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                         {showEmojiPicker && (
                                             <div className="absolute bottom-full left-4 mb-4 z-50 shadow-2xl rounded-2xl animate-in slide-in-from-bottom-5 fade-in duration-200">
                                                 <EmojiPicker 
@@ -1151,7 +1221,18 @@ export default function SessionDetailPage() {
                                                 placeholder="Type your message..." 
                                                 type="text"
                                                 value={chatInput}
-                                                onChange={e => setChatInput(e.target.value)}
+                                                onChange={e => {
+                                                    const val = e.target.value;
+                                                    setChatInput(val);
+                                                    const words = val.split(' ');
+                                                    const lastWord = words[words.length - 1];
+                                                    if (lastWord.startsWith('#')) {
+                                                        setTagSearchTerm(lastWord.substring(1).toUpperCase());
+                                                        setShowTagSuggestions(true);
+                                                    } else {
+                                                        setShowTagSuggestions(false);
+                                                    }
+                                                }}
                                                 onKeyDown={e => {
                                                     if (e.key === 'Enter') handleSendChatMessage()
                                                 }}
@@ -1171,7 +1252,7 @@ export default function SessionDetailPage() {
                                 </div>
                             </section>
                         </div>
-                    )}
+                    )})()}
 
                 </main>
 

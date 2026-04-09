@@ -38,13 +38,18 @@ export const setupChatSocket = (io: Server) => {
             const roomStr = `room_${room_id}`;
             
             try {
+                // Extract tags (words starting with #)
+                const regex = /#([a-zA-Z0-9_]+)/g;
+                const matches = message_text.match(regex);
+                const tags = matches ? matches.map(tag => tag.substring(1)) : [];
+
                 // Save message in database
-                const savedMessage = await saveMessage(room_id, user_id, username, message_text);
+                const savedMessage = await saveMessage(room_id, user_id, username, message_text, tags);
                 
                 // Broadcast message to all users in that room (including sender: use io.to / io.in)
                 io.in(roomStr).emit('receive_message', savedMessage);
                 
-                console.log(`[Socket] Message sent in room ${room_id} by ${username}`);
+                console.log(`[Socket] Message sent in room ${room_id} by ${username} with tags [${tags.join(',')}]`);
             } catch (error) {
                 console.error('[Socket] Error handling send_message event:', error);
                 // Optional: send error back to the sender

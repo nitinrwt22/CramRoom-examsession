@@ -1,13 +1,13 @@
 import pool from '../config/database';
 
-export const saveMessage = async (roomId: number, userId: number, username: string, messageText: string) => {
+export const saveMessage = async (roomId: number, userId: number, username: string, messageText: string, tags: string[] = []) => {
     const query = `
-        INSERT INTO messages (room_id, user_id, username, message_text)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO messages (room_id, user_id, username, message_text, tags)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING *;
     `;
     try {
-        const result = await pool.query(query, [roomId, userId, username, messageText]);
+        const result = await pool.query(query, [roomId, userId, username, messageText, tags]);
         return result.rows[0];
     } catch (error) {
         console.error('Error saving message:', error);
