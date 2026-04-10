@@ -64,3 +64,23 @@ export const updateReaction = async (messageId: number, emoji: string, userId: n
     const updateResult = await pool.query(updateQuery, [currentReactions, messageId]);
     return updateResult.rows[0].reactions;
 };
+
+export const toggleMessagePin = async (messageId: number, userId: number, pin: boolean) => {
+    const query = `
+        UPDATE messages
+        SET is_pinned = $1, 
+            pinned_by = $2, 
+            pinned_at = $3
+        WHERE message_id = $4
+        RETURNING *;
+    `;
+    const pinnedBy = pin ? userId : null;
+    const pinnedAt = pin ? new Date() : null;
+    try {
+        const result = await pool.query(query, [pin, pinnedBy, pinnedAt, messageId]);
+        return result.rows[0];
+    } catch (error) {
+        console.error('Error toggling message pin:', error);
+        throw error;
+    }
+};

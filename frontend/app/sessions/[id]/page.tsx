@@ -12,7 +12,7 @@ import {
     Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
     TrendingDown, TrendingUp, Minus, Upload, RefreshCw, AlertTriangle, 
     Zap, Link2, BookOpen, BarChart2, Folder, MessageSquare, Settings, 
-    UserPlus, Users, ChevronRight, CornerDownRight, Smile 
+    UserPlus, Users, ChevronRight, CornerDownRight, Smile, Pin, PinOff
 } from 'lucide-react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import ExamCountdown from '@/components/session/ExamCountdown'
@@ -78,6 +78,9 @@ interface ChatMessage {
     timestamp?: string
     tags?: string[]
     reactions?: Record<string, number[]>
+    is_pinned?: boolean
+    pinned_by?: number
+    pinned_at?: string
 }
 
 export default function SessionDetailPage() {
@@ -344,6 +347,14 @@ export default function SessionDetailPage() {
                 activeSocket.on('reaction_update', ({ message_id, reactions }: { message_id: number, reactions: Record<string, number[]> }) => {
                     setChatMessages(prev => prev.map(msg => 
                         (msg.message_id || msg.id) === message_id ? { ...msg, reactions } : msg
+                    ));
+                })
+
+                activeSocket.on('pin_update', (data: { message_id: number, is_pinned: boolean, pinned_by: number | null, pinned_at: string | null }) => {
+                    setChatMessages(prev => prev.map(msg => 
+                        (msg.message_id || msg.id) === data.message_id 
+                        ? { ...msg, is_pinned: data.is_pinned, pinned_by: data.pinned_by || undefined, pinned_at: data.pinned_at || undefined } 
+                        : msg
                     ));
                 })
             }
@@ -1175,6 +1186,40 @@ export default function SessionDetailPage() {
                                     </div>
                                 )}
 
+                                {/* Pinned Messages Bar */}
+                                {(() => {
+                                    const pinnedMessages = chatMessages.filter(m => m.is_pinned);
+                                    if (pinnedMessages.length === 0) return null;
+                                    
+                                    return (
+                                        <div className="px-6 py-3 border-b border-gray-100 dark:border-white/5 bg-amber-50/50 dark:bg-amber-900/10 flex flex-col gap-2 shrink-0 max-h-[25vh] overflow-y-auto">
+                                            <div className="flex items-center gap-2 text-xs font-bold text-amber-700 dark:text-amber-500 uppercase tracking-wider sticky top-0 bg-transparent mb-1">
+                                                <Pin className="w-3.5 h-3.5" /> Pinned Messages ({pinnedMessages.length})
+                                            </div>
+                                            {pinnedMessages.map((pMsg, pIdx) => (
+                                                <div 
+                                                    key={pIdx} 
+                                                    onClick={() => {
+                                                        const el = document.getElementById(`msg-${pMsg.message_id || pMsg.id}`);
+                                                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                    }}
+                                                    className="flex items-center gap-3 bg-white dark:bg-[#1C1C1E] border border-amber-200/50 dark:border-amber-900/30 p-2.5 rounded-lg cursor-pointer hover:border-amber-300 dark:hover:border-amber-700 transition-colors shadow-sm"
+                                                >
+                                                    <div className="w-6 h-6 rounded bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0 uppercase text-[10px] font-bold">
+                                                        {pMsg.username.substring(0,2)}
+                                                    </div>
+                                                    <p className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1 font-medium">
+                                                        {pMsg.message_text}
+                                                    </p>
+                                                    <span className="text-[10px] text-gray-400 font-medium whitespace-nowrap">
+                                                        {formatTime(pMsg.timestamp || new Date().toISOString())}
+                                                    </span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    );
+                                })()}
+
                                 <section className="flex-1 flex flex-col overflow-hidden relative">
                                     <div className="flex-1 overflow-y-auto px-6 py-8 space-y-6 scroll-smooth pb-32">
                                     {chatLoading ? (
@@ -1191,7 +1236,7 @@ export default function SessionDetailPage() {
                                             const isMe = msg.user_id === currentUser?.id;
                                             const msgId = msg.message_id || msg.id;
                                             return (
-                                                <div key={msgId || idx} className={`flex flex-col gap-1.5 ${isMe ? 'items-end' : 'items-start'} group relative`}>
+                                                <div id={`msg-${msgId}`} key={msgId || idx} className={`flex flex-col gap-1.5 ${isMe ? 'items-end' : 'items-start'} group relative`}>
                                                     <div className={`flex items-end gap-3 max-w-[85%] relative ${isMe ? 'flex-row-reverse' : ''}`}>
                                                         <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-[10px] font-bold ${isMe ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-zinc-800 text-gray-700 dark:text-gray-300'}`}>
                                                             {msg.username.substring(0, 2).toUpperCase()}
@@ -1206,16 +1251,28 @@ export default function SessionDetailPage() {
                                                                 ? 'bg-blue-600 text-white rounded-2xl rounded-br-sm' 
                                                                 : 'bg-gray-100 dark:bg-[#1A1A1C] border border-gray-200/50 dark:border-white/5 text-gray-800 dark:text-gray-200 rounded-2xl rounded-bl-sm'
                                                             }`}>
+                                                                {msg.is_pinned && (
+                                                                    <div className={`flex items-center gap-1.5 mb-1.5 text-[10px] uppercase font-bold tracking-wider ${isMe ? 'text-blue-200' : 'text-amber-600 dark:text-amber-500'}`}>
+                                                                        <Pin className="w-3 h-3" /> Pinned
+                                                                    </div>
+                                                                )}
                                                                 {renderMessageText(msg.message_text, isMe)}
 
-                                                                {/* Hover Reaction Button */}
+                                                                {/* Hover Reaction & Pin Button */}
                                                                 {msgId && (
-                                                                    <div className={`absolute top-1/2 -translate-y-1/2 ${isMe ? '-left-10' : '-right-10'} opacity-0 group-hover:opacity-100 transition-opacity`}>
+                                                                    <div className={`absolute top-0 flex flex-col gap-1.5 ${isMe ? '-left-10' : '-right-10'} opacity-0 group-hover:opacity-100 transition-opacity`}>
                                                                         <button 
                                                                             onClick={() => setReactionPickerMsgId(reactionPickerMsgId === msgId ? null : (msgId as number))}
                                                                             className="w-7 h-7 bg-white dark:bg-[#2A2A2C] border border-gray-200 dark:border-zinc-700 rounded-full flex items-center justify-center shadow-sm text-gray-400 hover:text-blue-500 hover:scale-110 transition-all z-10"
                                                                         >
                                                                             <Smile className="w-3.5 h-3.5" />
+                                                                        </button>
+                                                                        <button 
+                                                                            onClick={() => currentUser && socketRef.current?.emit(msg.is_pinned ? 'unpin_message' : 'pin_message', { message_id: msgId, room_id: parseInt(params.id), user_id: currentUser.id })}
+                                                                            className={`w-7 h-7 bg-white dark:bg-[#2A2A2C] border border-gray-200 dark:border-zinc-700 rounded-full flex items-center justify-center shadow-sm hover:scale-110 transition-all z-10 ${msg.is_pinned ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/40 border-blue-200 dark:border-blue-800/50' : 'text-gray-400 hover:text-amber-500'}`}
+                                                                            title={msg.is_pinned ? "Unpin message" : "Pin message"}
+                                                                        >
+                                                                            {msg.is_pinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
                                                                         </button>
                                                                         
                                                                         {reactionPickerMsgId === msgId && (

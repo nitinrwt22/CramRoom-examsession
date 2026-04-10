@@ -1,5 +1,5 @@
 import { Server, Socket } from 'socket.io';
-import { saveMessage, updateReaction } from '../models/messageModel';
+import { saveMessage, updateReaction, toggleMessagePin } from '../models/messageModel';
 
 export const setupChatSocket = (io: Server) => {
     io.on('connection', (socket: Socket) => {
@@ -88,6 +88,37 @@ export const setupChatSocket = (io: Server) => {
                 io.in(`room_${room_id}`).emit('reaction_update', { message_id, reactions: updatedReactions });
             } catch (error) {
                 console.error('[Socket] Error removing reaction:', error);
+            }
+        });
+
+        // Pin events
+        socket.on('pin_message', async (data: { message_id: number; room_id: number; user_id: number }) => {
+            try {
+                const { message_id, room_id, user_id } = data;
+                const updatedMsg = await toggleMessagePin(message_id, user_id, true);
+                io.in(`room_${room_id}`).emit('pin_update', { 
+                    message_id: updatedMsg.message_id, 
+                    is_pinned: updatedMsg.is_pinned, 
+                    pinned_by: updatedMsg.pinned_by, 
+                    pinned_at: updatedMsg.pinned_at 
+                });
+            } catch (error) {
+                console.error('[Socket] Error pinning message:', error);
+            }
+        });
+
+        socket.on('unpin_message', async (data: { message_id: number; room_id: number; user_id: number }) => {
+            try {
+                const { message_id, room_id, user_id } = data;
+                const updatedMsg = await toggleMessagePin(message_id, user_id, false);
+                io.in(`room_${room_id}`).emit('pin_update', { 
+                    message_id: updatedMsg.message_id, 
+                    is_pinned: updatedMsg.is_pinned, 
+                    pinned_by: updatedMsg.pinned_by, 
+                    pinned_at: updatedMsg.pinned_at 
+                });
+            } catch (error) {
+                console.error('[Socket] Error unpinning message:', error);
             }
         });
 
