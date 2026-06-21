@@ -48,6 +48,8 @@ router.post('/join', async (req: AuthRequest, res) => {
             res.status(404).json({ error: error.message });
         } else if (error.message === 'User already joined this session') {
             res.status(409).json({ error: error.message });
+        } else if (error.message === 'Session is not active') {
+            res.status(400).json({ error: error.message });
         } else {
             res.status(500).json({ error: error.message });
         }
