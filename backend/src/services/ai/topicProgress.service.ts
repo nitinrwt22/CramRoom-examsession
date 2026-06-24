@@ -1,4 +1,5 @@
 import pool from '../../config/database';
+import { config } from '../../config/env';
 
 export interface TopicProgressEntry {
     topic: string;
@@ -19,15 +20,40 @@ export const getTopicProgressComparison = async (sessionId: string): Promise<Top
         const sessionIdNum = parseInt(sessionId, 10);
         if (isNaN(sessionIdNum)) return [];
 
-        // Fetch all topic progress rows for the given session ordered by recorded_at DESC
-        // Parameterized query is used to prevent SQL injection
-        const query = `
-            SELECT topic, score, recorded_at
-            FROM session_topic_progress
-            WHERE session_id = $1
-            ORDER BY recorded_at DESC
-        `;
-        const { rows } = await pool.query(query, [sessionIdNum]);
+        let rows = [];
+
+        if (config.useV2Intelligence) {
+            const query = `
+                SELECT stp.topic, stp.score, stp.recorded_at
+                FROM session_topic_progress stp
+                JOIN syllabi s ON s.session_id = stp.session_id
+                JOIN topics t ON t.syllabus_id = s.id AND LOWER(t.name) = LOWER(stp.topic)
+                WHERE stp.session_id = $1
+                ORDER BY stp.recorded_at DESC
+            `;
+            const result = await pool.query(query, [sessionIdNum]);
+            rows = result.rows;
+
+            if (rows.length === 0) {
+                const legacyQuery = `
+                    SELECT topic, score, recorded_at
+                    FROM session_topic_progress
+                    WHERE session_id = $1
+                    ORDER BY recorded_at DESC
+                `;
+                const legacyResult = await pool.query(legacyQuery, [sessionIdNum]);
+                rows = legacyResult.rows;
+            }
+        } else {
+            const query = `
+                SELECT topic, score, recorded_at
+                FROM session_topic_progress
+                WHERE session_id = $1
+                ORDER BY recorded_at DESC
+            `;
+            const result = await pool.query(query, [sessionIdNum]);
+            rows = result.rows;
+        }
 
         // Group rows by topic
         const groupedTopics: Record<string, { score: number, recorded_at: Date }[]> = {};

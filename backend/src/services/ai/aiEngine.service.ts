@@ -5,6 +5,8 @@ import { getChunkSummaries, getUnchunkedMessages } from '../../models/sessionAiC
 import { detectWeakTopics } from './weakTopicAnalytics.service';
 import { logAIEvent } from "../../utils/aiLogger";
 import { selectRelevantChunks } from './knowledgeRetrieval.service';
+import pool from '../../config/database';
+import { config } from '../../config/env';
 /**
  * 1. AIIntent
  * Define allowed intents for the AI Engine.
@@ -481,6 +483,93 @@ const handlePyqAnswerGeneration = async (input: AIEngineInput): Promise<AIEngine
         // Fallback for raw string
     }
 
+    const sessionIdNum = parseInt(context.sessionMeta.sessionId, 10);
+    const finalMarks = marks || 5;
+
+    let cachedAnswer: string | null = null;
+    let canonicalQuestionId: string | null = null;
+    let notesHash = 'default_version';
+
+    if (config.useV2Intelligence && !isNaN(sessionIdNum)) {
+        try {
+            // 1. Try JSON payload
+            try {
+                const parsed = JSON.parse(input.question);
+                if (parsed.canonicalQuestionId) {
+                    canonicalQuestionId = parsed.canonicalQuestionId;
+                }
+            } catch (_) {}
+
+            // 2. Try match against canonical_questions text
+            if (!canonicalQuestionId) {
+                const cqTextRes = await pool.query(
+                    `SELECT cq.id 
+                     FROM canonical_questions cq
+                     JOIN topics t ON cq.topic_id = t.id
+                     JOIN syllabi s ON t.syllabus_id = s.id
+                     WHERE s.session_id = $1 AND LOWER(cq.text) = LOWER($2)
+                     LIMIT 1`,
+                    [sessionIdNum, questionText]
+                );
+                if (cqTextRes.rows.length > 0) {
+                    canonicalQuestionId = cqTextRes.rows[0].id;
+                }
+            }
+
+            // 3. Fallback to raw_questions match
+            if (!canonicalQuestionId) {
+                const rqRes = await pool.query(
+                    `SELECT rq.canonical_id 
+                     FROM raw_questions rq
+                     JOIN papers p ON rq.paper_id = p.id
+                     WHERE p.session_id = $1 AND (LOWER(rq.original_text) = LOWER($2) OR LOWER(rq.corrected_text) = LOWER($2))
+                     LIMIT 1`,
+                    [sessionIdNum, questionText]
+                );
+                if (rqRes.rows.length > 0 && rqRes.rows[0].canonical_id) {
+                    canonicalQuestionId = rqRes.rows[0].canonical_id;
+                }
+            }
+
+            if (canonicalQuestionId) {
+                // 2. Fetch notes hash
+                const notesRes = await pool.query(
+                    `SELECT content FROM personal_notes WHERE session_id = $1 LIMIT 1`,
+                    [sessionIdNum]
+                );
+                const notesContent = notesRes.rows.length > 0 ? notesRes.rows[0].content : '';
+                const crypto = require('crypto');
+                notesHash = crypto.createHash('sha256').update(notesContent).digest('hex');
+                
+                // 3. Query generated_answers cache
+                const cacheRes = await pool.query(
+                    `SELECT exam_focused_answer 
+                     FROM generated_answers 
+                     WHERE canonical_question_id = $1 AND marks = $2 AND notes_version_hash = $3`,
+                    [canonicalQuestionId, finalMarks, notesHash]
+                );
+                
+                if (cacheRes.rows.length > 0) {
+                    cachedAnswer = cacheRes.rows[0].exam_focused_answer;
+                }
+            }
+        } catch (e: any) {
+            console.error('Error during answer cache lookup:', e.message);
+        }
+    }
+
+    if (cachedAnswer) {
+        const sourcesUsed = context.materials.files
+            .filter(f => cachedAnswer!.includes(f.name))
+            .map(f => f.name);
+
+        return {
+            answer: cachedAnswer,
+            confidence: "high",
+            sourcesUsed: sourcesUsed.length > 0 ? sourcesUsed : ["Cached Knowledge"]
+        };
+    }
+
     // 1. Construct System Prompt (SYSTEM RULES)
     const systemPrompt = `
 You are an expert AI exam assistant. Your primary goal is to provide highly structured, marks-weighted answers for previous year questions (PYQs).
@@ -548,6 +637,19 @@ You are an expert AI exam assistant. Your primary goal is to provide highly stru
             }
         });
         throw error;
+    }
+
+    if (config.useV2Intelligence && canonicalQuestionId) {
+        try {
+            await pool.query(
+                `INSERT INTO generated_answers (canonical_question_id, marks, notes_version_hash, exam_focused_answer)
+                 VALUES ($1, $2, $3, $4)
+                 ON CONFLICT (canonical_question_id, marks, notes_version_hash) DO NOTHING`,
+                [canonicalQuestionId, finalMarks, notesHash, aiResponse.text]
+            );
+        } catch (e: any) {
+            console.error('Error saving answer to cache:', e.message);
+        }
     }
 
     // Extract sources

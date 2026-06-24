@@ -1,5 +1,6 @@
 import pool from '../config/database';
 import { getKnowledgeChunksForSession } from '../models/knowledgeChunk.model';
+import { config } from '../config/env';
 
 // ------------------------------------------------------------------
 // Type Definitions
@@ -101,15 +102,71 @@ export const buildSessionContext = async (sessionId: string, userId: string): Pr
         const participantCount = countResult.rows[0]?.count || 0;
 
         // 4. Fetch Uploaded Files
-        const filesQuery = `
-            SELECT 
-                id, 
-                original_name, 
-                mime_type 
-            FROM session_files 
-            WHERE session_id = $1;
-        `;
-        const filesResult = await client.query(filesQuery, [sId]);
+        let files: Array<{ id: string; name: string; type: 'notes' | 'syllabus' | 'pyq' | 'other' }> = [];
+
+        if (config.useV2Intelligence) {
+            const v2FilesQuery = `
+                SELECT 
+                    COALESCE(m.old_file_id::text, p.id::text) AS id,
+                    p.title AS name,
+                    'pyq'::text AS type
+                FROM papers p
+                LEFT JOIN migration_file_uuid_map m ON m.new_uuid = p.id AND m.target_table = 'papers'
+                WHERE p.session_id = $1
+
+                UNION ALL
+
+                SELECT 
+                    COALESCE(m.old_file_id::text, sy.id::text) AS id,
+                    sy.file_name AS name,
+                    'syllabus'::text AS type
+                FROM syllabi sy
+                LEFT JOIN migration_file_uuid_map m ON m.new_uuid = sy.id AND m.target_table = 'syllabi'
+                WHERE sy.session_id = $1
+
+                UNION ALL
+
+                SELECT 
+                    COALESCE(m.old_file_id::text, un.id::text) AS id,
+                    un.title AS name,
+                    'notes'::text AS type
+                FROM uploaded_notes un
+                LEFT JOIN migration_file_uuid_map m ON m.new_uuid = un.id AND m.target_table = 'uploaded_notes'
+                WHERE un.session_id = $1;
+            `;
+            const v2FilesResult = await client.query(v2FilesQuery, [sId]);
+            files = v2FilesResult.rows.map((row: any) => ({
+                id: row.id,
+                name: row.name,
+                type: row.type as 'notes' | 'syllabus' | 'pyq' | 'other'
+            }));
+        } else {
+            const filesQuery = `
+                SELECT 
+                    id, 
+                    original_name, 
+                    mime_type 
+                FROM session_files 
+                WHERE session_id = $1;
+            `;
+            const filesResult = await client.query(filesQuery, [sId]);
+            files = filesResult.rows.map((file: any) => {
+                const name = file.original_name || '';
+                const lowerName = name.toLowerCase();
+
+                let type: 'notes' | 'syllabus' | 'pyq' | 'other' = 'other';
+
+                if (lowerName.includes('note')) type = 'notes';
+                else if (lowerName.includes('syllabus')) type = 'syllabus';
+                else if (lowerName.includes('pyq') || lowerName.includes('paper')) type = 'pyq';
+
+                return {
+                    id: file.id.toString(),
+                    name: name,
+                    type: type
+                };
+            });
+        }
 
         // 4b. Fetch Knowledge Chunks from uploaded markdown files
         const knowledgeChunks = await getKnowledgeChunksForSession(sId);
@@ -146,24 +203,6 @@ export const buildSessionContext = async (sessionId: string, userId: string): Pr
         // examInDays: time until exam date
         const msUntilExam = examDate.getTime() - now.getTime();
         const examInDays = parseFloat((msUntilExam / (1000 * 60 * 60 * 24)).toFixed(1));
-
-        // Process Files
-        const files = filesResult.rows.map((file: any) => {
-            const name = file.original_name || '';
-            const lowerName = name.toLowerCase();
-
-            let type: 'notes' | 'syllabus' | 'pyq' | 'other' = 'other';
-
-            if (lowerName.includes('note')) type = 'notes';
-            else if (lowerName.includes('syllabus')) type = 'syllabus';
-            else if (lowerName.includes('pyq') || lowerName.includes('paper')) type = 'pyq';
-
-            return {
-                id: file.id.toString(), // ensure string as per interface
-                name: name,
-                type: type
-            };
-        });
 
         // 6. Return Structured Context
         return {

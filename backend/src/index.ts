@@ -8,10 +8,12 @@ import { setupChatSocket } from './socket/chatSocket';
 const PORT = config.port;
 
 import { initSessionExpiryCron } from "./cron/sessionExpiry.cron";
+import { startJobWorker } from "./services/ai/jobWorker.service";
 
 const startServer = async () => {
     await connectDB();
     initSessionExpiryCron();
+    startJobWorker();
     
     // Create HTTP Server extending Express App
     const server = http.createServer(app);
