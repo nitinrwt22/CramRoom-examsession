@@ -1,0 +1,403 @@
+{
+  "timestamp": "2026-06-25T19:09:59.560Z",
+  "summary": {
+    "total": 56,
+    "passed": 56,
+    "failed": 0,
+    "totalMs": 278026
+  },
+  "results": [
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.1 Session Creation: new session writes correct schema row",
+      "passed": true,
+      "durationMs": 8,
+      "message": "Session 56 created correctly."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.2 Paper Upload: inserts paper + queues UPLOAD_PROCESSING job",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Paper UUID 77489d42-ab48-42ca-b442-c655a72b2fd6 created, job dbc182fb-c799-4565-9779-879442b9c71a queued."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.3 Syllabus Upload: inserts syllabi row + queues SYLLABUS_PROCESSING job",
+      "passed": true,
+      "durationMs": 2,
+      "message": "Syllabus ab01125c-d31d-48d2-a9b2-3b9ea546bc02 created, job a88ecefb-6a4d-4588-85de-1e6246e966fb queued."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.4 Notes Upload: inserts uploaded_notes row + updates migration map",
+      "passed": true,
+      "durationMs": 3,
+      "message": "Note c267cc0b-8c56-4a5d-8c6f-1f285ece116b created with legacy mapping 43."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.5 Question Retrieval: getKnowledgeChunksForSession returns V2 raw_questions",
+      "passed": true,
+      "durationMs": 3,
+      "message": "Retrieved 9 chunks. Has raw questions: true."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.6 Topic Retrieval: topic_analytics returns priority-sorted topics",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Found 1 topic analytics rows. All labels valid: true."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.7a Answer Generation: first request triggers generation (cache miss)",
+      "passed": true,
+      "durationMs": 66809,
+      "message": "Answer cached after miss: true. Generation took 66799ms."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.7b Answer Generation: second identical request is a cache hit (< 100ms)",
+      "passed": true,
+      "durationMs": 20,
+      "message": "Cache hit duration: 2ms. Answer present: true."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.7c Answer Generation: notes update invalidates cache (new hash causes miss)",
+      "passed": true,
+      "durationMs": 128011,
+      "message": "Cache rows before: 1, after notes change: 2. New row inserted: true."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.7d Answer Generation: notes update produces a NEW hash AND inserts a new cache row under the new hash",
+      "passed": true,
+      "durationMs": 83053,
+      "message": "hashBefore!=hashAfter=true, newRow=true, seededRowPreserved=true, countDelta=1."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.8 Knowledge Retrieval: V2 chunks include [Uploaded Note] when notes exist",
+      "passed": true,
+      "durationMs": 18,
+      "message": "Note chunk found: true. Starts with [Uploaded Note]: true."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.9 File Download: resolves by legacy integer ID via migration map",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Legacy ID 43 resolves to UUID c267cc0b-8c56-4a5d-8c6f-1f285ece116b. Match: true."
+    },
+    {
+      "suite": "SECTION 2 — Functional Tests",
+      "name": "2.10 File Delete: deletes paper and cascades to raw_questions + map entry",
+      "passed": true,
+      "durationMs": 8,
+      "message": "Before: 1 raw_questions. After delete — paper: 0, rq: 0, map: 0, file: 0. All 0: true."
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.1 FK Integrity: papers → sessions (no dangling FKs)",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Dangling papers → sessions FKs: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.2 FK Integrity: raw_questions → papers (no dangling FKs)",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Dangling raw_questions → papers FKs: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.3 FK Integrity: topics → syllabi (no dangling FKs)",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Dangling topics → syllabi FKs: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.4 FK Integrity: syllabi → sessions (no dangling FKs)",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Dangling syllabi → sessions FKs: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.5 FK Integrity: uploaded_notes → sessions & users (no dangling FKs)",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Dangling sessions: 0, users: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.6 Orphan check: no raw_questions with NULL paper_id",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Orphaned raw_questions: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.7 Orphan check: no topics with NULL syllabus_id",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Orphaned topics: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.8 Orphan check: no topic_analytics with invalid topic_id",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Orphaned topic_analytics: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.9 Orphan check: no question_variants with invalid canonical_question_id",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Orphaned question_variants: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.10 Null check: papers.title / pdf_url / session_id are NOT NULL",
+      "passed": true,
+      "durationMs": 2,
+      "message": "Null title: 0, null pdf_url: 0, null session_id: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.11 Null check: raw_questions.original_text / paper_id are NOT NULL",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Null original_text: 0, null paper_id: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.12 Duplicate check: generated_answers_cache_key unique constraint enforced at INSERT time",
+      "passed": true,
+      "durationMs": 4,
+      "message": "plainInsertOk=true, dupThrewUnique=true (code=23505), onConflictNoError=true, rowCount=1."
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.13 Duplicate check: personal_notes (session_id, user_id) unique constraint enforced",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Duplicate personal_note insert rejected: true"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.14 Migration Consistency: all migration_file_uuid_map entries resolve to live V2 rows",
+      "passed": true,
+      "durationMs": 6,
+      "message": "Broken migration map entries: 0"
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.15 Cascade delete: deleting a syllabus cascades to its topics",
+      "passed": true,
+      "durationMs": 6,
+      "message": "Topic row after syllabus delete: 0 (expected 0)."
+    },
+    {
+      "suite": "SECTION 3 — Data Integrity Tests",
+      "name": "3.16 ON DELETE SET NULL: deleting topic sets raw_questions.topic_id to NULL (not deleted)",
+      "passed": true,
+      "durationMs": 4,
+      "message": "raw_questions.topic_id after topic delete: null (expected NULL)."
+    },
+    {
+      "suite": "SECTION 4 — API / Service Tests",
+      "name": "4.1 getKnowledgeFiles: returns array with at least one V2 record for test session",
+      "passed": true,
+      "durationMs": 3,
+      "message": "Returned 4 files. Has V2 types: true."
+    },
+    {
+      "suite": "SECTION 4 — API / Service Tests",
+      "name": "4.2 getKnowledgeFiles: non-participant throws authorization error",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Non-participant access rejected: true"
+    },
+    {
+      "suite": "SECTION 4 — API / Service Tests",
+      "name": "4.3 deleteKnowledgeFile via UUID: deletes uploaded_notes + map entry",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Note deleted: true, map cleaned: true. Message: Knowledge file deleted successfully"
+    },
+    {
+      "suite": "SECTION 4 — API / Service Tests",
+      "name": "4.4 deleteKnowledgeFile: deletes syllabi + cascades to topics",
+      "passed": true,
+      "durationMs": 5,
+      "message": "Syllabus deleted: true, cascade topic deleted: true."
+    },
+    {
+      "suite": "SECTION 4 — API / Service Tests",
+      "name": "4.5 generateExpectedQuestions: returns array with probability labels",
+      "passed": true,
+      "durationMs": 6,
+      "message": "Expected questions: 1. All probabilities valid: true."
+    },
+    {
+      "suite": "SECTION 4 — API / Service Tests",
+      "name": "4.6 Job Worker: ANALYTICS_REBUILD job populates topic_analytics",
+      "passed": true,
+      "durationMs": 3,
+      "message": "topic_analytics before rebuild (session 34): 1. After rebuild: 1."
+    },
+    {
+      "suite": "SECTION 4 — API / Service Tests",
+      "name": "4.7 Job Worker: failed job updates status=failed and writes error_message",
+      "passed": true,
+      "durationMs": 2,
+      "message": "Job errored: true. Status: failed. Error logged: true."
+    },
+    {
+      "suite": "SECTION 5 — AI Context Tests",
+      "name": "5.1 buildSessionContext: includes V2 papers, syllabi, notes in materials",
+      "passed": true,
+      "durationMs": 9,
+      "message": "Files in context: 2. Has PYQ: true."
+    },
+    {
+      "suite": "SECTION 5 — AI Context Tests",
+      "name": "5.2 AI Context: knowledge chunks include raw_questions text",
+      "passed": true,
+      "durationMs": 2,
+      "message": "Knowledge chunks: 8. First chunk length: 162 chars."
+    },
+    {
+      "suite": "SECTION 5 — AI Context Tests",
+      "name": "5.3 AI Context: personal_notes present in session, context builds cleanly",
+      "passed": true,
+      "durationMs": 3,
+      "message": "Session context built cleanly with personal notes present. Subject: ece."
+    },
+    {
+      "suite": "SECTION 5 — AI Context Tests",
+      "name": "5.4 Question retrieval: generateExpectedQuestions works under V2",
+      "passed": true,
+      "durationMs": 3,
+      "message": "generateExpectedQuestions returned 1 questions as array."
+    },
+    {
+      "suite": "SECTION 6 — Legacy Compatibility Tests",
+      "name": "6.1 Legacy path: getKnowledgeChunksForSession works with useV2Intelligence=false",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Legacy chunks returned: 8 (array: true)."
+    },
+    {
+      "suite": "SECTION 6 — Legacy Compatibility Tests",
+      "name": "6.2 Legacy path: getKnowledgeFiles returns array with useV2Intelligence=false",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Legacy file list returned: 1 files."
+    },
+    {
+      "suite": "SECTION 6 — Legacy Compatibility Tests",
+      "name": "6.3 Legacy path: generateExpectedQuestions fallback (useV2Intelligence=false)",
+      "passed": true,
+      "durationMs": 2,
+      "message": "Legacy expected questions returned: 6."
+    },
+    {
+      "suite": "SECTION 6 — Legacy Compatibility Tests",
+      "name": "6.4 Legacy compatibility: participants VIEW is queryable and returns session_members rows",
+      "passed": true,
+      "durationMs": 0,
+      "message": "participants VIEW: 2, session_members: 2. Match: true."
+    },
+    {
+      "suite": "SECTION 6 — Legacy Compatibility Tests",
+      "name": "6.5 Rollback script: V2 tables exist and can be verified for rollback readiness",
+      "passed": true,
+      "durationMs": 5,
+      "message": "All V2 tables exist for rollback: true. Missing: none."
+    },
+    {
+      "suite": "SECTION 7 — Performance Tests",
+      "name": "7.1 Performance: topic_analytics query resolves in < 15ms",
+      "passed": true,
+      "durationMs": 0,
+      "message": "topic_analytics query took 0ms (threshold: 15ms)."
+    },
+    {
+      "suite": "SECTION 7 — Performance Tests",
+      "name": "7.2 Performance: generated_answers cache lookup resolves in < 30ms",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Cache lookup took 1ms (threshold: 30ms)."
+    },
+    {
+      "suite": "SECTION 7 — Performance Tests",
+      "name": "7.3 Performance: topic_analytics query uses Index Scan (not Seq Scan)",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Plan: Sort  (cost=9.51..9.52 rows=2 width=28)   Sort Key: priority_score DESC   ->  Bitmap Heap Scan on topic_analytics ta  (c... Rows: 1. Uses index or small table: true."
+    },
+    {
+      "suite": "SECTION 7 — Performance Tests",
+      "name": "7.4 Performance: papers query by session_id uses Index Scan",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Plan: Index Scan using idx_papers_session_id on papers  (cost=0.14..8.16 rows=1 width=16)   Index Cond: (session_id = 34)... Uses index or small table: true."
+    },
+    {
+      "suite": "SECTION 7 — Performance Tests",
+      "name": "7.5 Performance: raw_questions fetch by paper_id resolves in < 15ms",
+      "passed": true,
+      "durationMs": 1,
+      "message": "raw_questions lookup took 1ms (threshold: 15ms)."
+    },
+    {
+      "suite": "SECTION 7 — Performance Tests",
+      "name": "7.6 Performance: generated_answers composite unique index exists",
+      "passed": true,
+      "durationMs": 2,
+      "message": "generated_answers_cache_key index: EXISTS."
+    },
+    {
+      "suite": "SECTION 7 — Performance Tests",
+      "name": "7.7 Performance: 10 consecutive identical cache hits resolve in < 100ms each (plan §9 Go #4)",
+      "passed": true,
+      "durationMs": 8,
+      "message": "iterations=10, durations=[0,0,1,0,0,1,0,0,1,0]ms, allUnder100ms=true, allAnswerMatch=true, finalRowCount=1."
+    },
+    {
+      "suite": "SECTION 8 — Rollback Tests (Structural Verification)",
+      "name": "8.1 Rollback Safety: legacy tables (files, session_ai_chunks) still exist",
+      "passed": true,
+      "durationMs": 0,
+      "message": "Legacy tables found: files, messages, session_ai_chunks, session_topic_progress."
+    },
+    {
+      "suite": "SECTION 8 — Rollback Tests (Structural Verification)",
+      "name": "8.2 Rollback Safety: legacy session_ai_chunks data is untouched",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Legacy session_ai_chunks with file_id: 17 rows (data preserved)."
+    },
+    {
+      "suite": "SECTION 8 — Rollback Tests (Structural Verification)",
+      "name": "8.3 Rollback Safety: failed transaction leaves database clean",
+      "passed": true,
+      "durationMs": 1,
+      "message": "Papers before: 2, after rolled-back transaction: 2. Clean: true."
+    },
+    {
+      "suite": "SECTION 8 — Rollback Tests (Structural Verification)",
+      "name": "8.4 Rollback Safety: participants is a VIEW (rename revert is safe)",
+      "passed": true,
+      "durationMs": 1,
+      "message": "participants object type: VIEW. Is VIEW: true."
+    }
+  ]
+}
