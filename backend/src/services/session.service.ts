@@ -170,9 +170,9 @@ export const getMySessions = async (userId: number) => {
                 WHEN s.host_id = $1 THEN 'host'
                 ELSE 'participant'
             END AS "role",
-            (SELECT COUNT(*) FROM participants p2 WHERE p2.session_id = s.id)::int as participants
+            (SELECT COUNT(*) FROM session_members p2 WHERE p2.session_id = s.id)::int as participants
         FROM sessions s
-        JOIN participants p ON s.id = p.session_id
+        JOIN session_members p ON s.id = p.session_id
         WHERE p.user_id = $1
         ORDER BY s.exam_date DESC;
     `;
@@ -205,7 +205,7 @@ export const getActiveSessions = async (userId: number) => {
                 ELSE 'participant'
             END AS "role"
         FROM sessions s
-        JOIN participants p ON s.id = p.session_id
+        JOIN session_members p ON s.id = p.session_id
         WHERE p.user_id = $1 AND s.status = 'active'
         ORDER BY s.exam_date ASC;
     `;
@@ -242,7 +242,7 @@ export const getSessionDetails = async (sessionId: number, userId: number) => {
                 s.host_id,
                 s.created_at
             FROM sessions s
-            JOIN participants p ON s.id = p.session_id
+            JOIN session_members p ON s.id = p.session_id
             WHERE s.id = $1 AND p.user_id = $2;
         `;
 
@@ -267,7 +267,7 @@ export const getSessionDetails = async (sessionId: number, userId: number) => {
                     WHEN u.id = $2 THEN 'host'
                     ELSE 'participant'
                 END AS "role"
-            FROM participants p
+            FROM session_members p
             JOIN users u ON p.user_id = u.id
             WHERE p.session_id = $1;
         `;

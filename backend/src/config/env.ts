@@ -15,5 +15,4 @@ export const config = {
     jwt: {
         secret: process.env.JWT_SECRET || 'default_secret',
     },
-    useV2Intelligence: process.env.USE_V2_INTELLIGENCE === 'true'
 };

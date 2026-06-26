@@ -36,7 +36,7 @@ export const uploadSessionFile = async (
         // The requirement says "Verify user is a participant". We strictly check the participants table.
         const participantQuery = `
       SELECT 1
-      FROM participants
+      FROM session_members
       WHERE session_id = $1 AND user_id = $2
     `;
         const participantResult = await client.query(participantQuery, [sessionId, userId]);
@@ -93,7 +93,7 @@ export const getSessionFiles = async (sessionId: number, userId: number) => {
     }
 
     // 2. Verify user is a participant
-    const participantQuery = 'SELECT 1 FROM participants WHERE session_id = $1 AND user_id = $2';
+    const participantQuery = 'SELECT 1 FROM session_members WHERE session_id = $1 AND user_id = $2';
     const participantResult = await pool.query(participantQuery, [sessionId, userId]);
 
     if (participantResult.rows.length === 0) {
@@ -197,7 +197,7 @@ export const downloadSessionFile = async (fileId: number, userId: number) => {
 
     // 3. Verify user is a participant
     const participantResult = await pool.query(
-        'SELECT 1 FROM participants WHERE session_id = $1 AND user_id = $2',
+        'SELECT 1 FROM session_members WHERE session_id = $1 AND user_id = $2',
         [file.session_id, userId]
     );
 

@@ -6,7 +6,7 @@ import { detectWeakTopics } from './weakTopicAnalytics.service';
 import { logAIEvent } from "../../utils/aiLogger";
 import { selectRelevantChunks } from './knowledgeRetrieval.service';
 import pool from '../../config/database';
-import { config } from '../../config/env';
+
 /**
  * 1. AIIntent
  * Define allowed intents for the AI Engine.
@@ -490,7 +490,7 @@ const handlePyqAnswerGeneration = async (input: AIEngineInput): Promise<AIEngine
     let canonicalQuestionId: string | null = null;
     let notesHash = 'default_version';
 
-    if (config.useV2Intelligence && !isNaN(sessionIdNum)) {
+    if (!isNaN(sessionIdNum)) {
         try {
             // 1. Try JSON payload
             try {
@@ -639,7 +639,7 @@ You are an expert AI exam assistant. Your primary goal is to provide highly stru
         throw error;
     }
 
-    if (config.useV2Intelligence && canonicalQuestionId) {
+    if (canonicalQuestionId) {
         try {
             await pool.query(
                 `INSERT INTO generated_answers (canonical_question_id, marks, notes_version_hash, exam_focused_answer)

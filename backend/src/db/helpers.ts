@@ -78,7 +78,7 @@ export const updateSessionStatus = async (sessionId: number, status: string) => 
 
 export const addParticipant = async (userId: number, sessionId: number) => {
     const query = `
-    INSERT INTO participants (user_id, session_id)
+    INSERT INTO session_members (user_id, session_id)
     VALUES ($1, $2)
     RETURNING *;
   `;
@@ -93,7 +93,7 @@ export const addParticipant = async (userId: number, sessionId: number) => {
 
 export const removeParticipant = async (userId: number, sessionId: number) => {
     const query = `
-    DELETE FROM participants
+    DELETE FROM session_members
     WHERE user_id = $1 AND session_id = $2
     RETURNING *;
   `;
@@ -102,35 +102,6 @@ export const removeParticipant = async (userId: number, sessionId: number) => {
         return result.rows[0];
     } catch (error) {
         console.error('Error removing participant:', error);
-        throw error;
-    }
-};
-
-export const addFile = async (sessionId: number, uploadedBy: number, fileName: string, fileType: string, fileUrl: string) => {
-    const query = `
-    INSERT INTO files (session_id, uploaded_by, file_name, file_type, file_url)
-    VALUES ($1, $2, $3, $4, $5)
-    RETURNING *;
-  `;
-    try {
-        const result = await pool.query(query, [sessionId, uploadedBy, fileName, fileType, fileUrl]);
-        return result.rows[0];
-    } catch (error) {
-        console.error('Error adding file:', error);
-        throw error;
-    }
-};
-
-export const getFilesBySession = async (sessionId: number) => {
-    const query = `
-    SELECT * FROM files
-    WHERE session_id = $1;
-  `;
-    try {
-        const result = await pool.query(query, [sessionId]);
-        return result.rows;
-    } catch (error) {
-        console.error('Error fetching files by session:', error);
         throw error;
     }
 };

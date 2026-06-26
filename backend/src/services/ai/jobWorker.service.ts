@@ -1,5 +1,4 @@
 import pool from '../../config/database';
-import { config } from '../../config/env';
 import { detectFileType, extractText, normaliseToMarkdown } from '../../utils/fileConverter.util';
 import fs from 'fs';
 import path from 'path';
@@ -380,7 +379,6 @@ const queueSubsequentJob = async (sessionId: number, jobType: string) => {
 };
 
 export const startJobWorker = () => {
-    if (!config.useV2Intelligence) return;
     if (pollingTimer) return;
 
     console.log('[JobWorker] 🚀 Background job worker started.');

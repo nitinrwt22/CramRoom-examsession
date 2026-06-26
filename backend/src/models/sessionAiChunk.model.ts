@@ -1,5 +1,4 @@
 import pool from '../config/database';
-import { config } from '../config/env';
 
 /**
  * Retrieves unchunked messages for a specific session.
@@ -50,13 +49,15 @@ export const saveChunkSummary = async (sessionId: string, startIndex: number, en
 
 /**
  * Retrieves all chunk summaries for a specific session.
+ * After the V2 cleanup the file_id, topic, and chunk_text columns have been
+ * dropped from session_ai_chunks. All rows in this table are message-based
+ * chat summary chunks — no file_id filter is required.
  * @param sessionId - The ID of the session.
  */
 export const getChunkSummaries = async (sessionId: string) => {
-    const filter = config.useV2Intelligence ? 'AND file_id IS NULL' : '';
     const query = `
         SELECT * FROM session_ai_chunks
-        WHERE session_id = $1 ${filter}
+        WHERE session_id = $1
         ORDER BY created_at ASC;
     `;
     const result = await pool.query(query, [sessionId]);

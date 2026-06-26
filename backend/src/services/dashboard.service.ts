@@ -21,7 +21,7 @@ export const getUserDashboard = async (userId: number): Promise<DashboardStats> 
             COUNT(*) FILTER (WHERE s.status = 'active') as active_count,
             COUNT(*) FILTER (WHERE s.status = 'expired') as expired_count
         FROM sessions s
-        JOIN participants p ON s.id = p.session_id
+        JOIN session_members p ON s.id = p.session_id
         WHERE p.user_id = $1
     `;
 
