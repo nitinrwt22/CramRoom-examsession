@@ -8,6 +8,13 @@ export interface WeakTopic {
     frequency: number;
 }
 
+/**
+ * Minimum cumulative score a topic must reach before being classified as weak.
+ * Specification (Phase 2 Plan §2): score must be >= 3.
+ * Topics scoring below this threshold are NOT returned and NOT persisted.
+ */
+const MIN_WEAK_TOPIC_SCORE = 3;
+
 const genericWords = new Set([
     "generate", "create", "session", "question", "answer", "summary", "revision", "analysis",
     "topic", "plan", "help", "show", "make", "use", "learn", "understand", "discuss",
@@ -106,7 +113,8 @@ export const detectWeakTopics = async (sessionId: string): Promise<WeakTopic[]> 
                 });
             });
 
-            if (totalScore > 0) {
+            // Only topics meeting the minimum threshold qualify as weak.
+            if (totalScore >= MIN_WEAK_TOPIC_SCORE) {
                 v2TopicScores.push({ id: row.id, name: topicName, score: Math.round(totalScore) });
             }
         }
@@ -126,7 +134,8 @@ export const detectWeakTopics = async (sessionId: string): Promise<WeakTopic[]> 
             }
         });
 
-        // Persist snapshot to topic_progress_history (V2 progress table)
+        // Persist snapshot to topic_progress_history (V2 progress table).
+        // Only topics that passed the MIN_WEAK_TOPIC_SCORE threshold are in `result`.
         if (result.length > 0) {
             // Build a map of topicName → topic_id for efficient lookup
             const topicIdMap = new Map<string, string>(

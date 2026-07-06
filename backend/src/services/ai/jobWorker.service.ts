@@ -1,106 +1,7 @@
 import pool from '../../config/database';
-import { detectFileType, extractText, normaliseToMarkdown } from '../../utils/fileConverter.util';
+import { detectFileType, extractText, normaliseToMarkdown, chunkByHeadings, parsePyqContent, extractSubtopics } from '../../utils/fileConverter.util';
 import fs from 'fs';
 import path from 'path';
-
-// ---------------------------------------------------------------------------
-// Helpers duplicated/adapted from knowledgeUpload.service.ts and migration scripts
-// ---------------------------------------------------------------------------
-
-function parsePyqContent(content: string, fallbackTopic: string, fallbackYear: number | null): Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> {
-    const chunks: Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> = [];
-    const sections = content.split(/^(?=## |(?:Q?\d+\.)(?:\s+|$))/m);
-
-    for (const section of sections) {
-        const trimmed = section.trim();
-        if (!trimmed) continue;
-
-        const headingMatch = trimmed.match(/^(?:## |(?:Q?\d+\.))\s*(.*)/);
-        if (headingMatch && headingMatch[1].trim()) {
-            let heading = headingMatch[1].trim();
-            let body = trimmed.replace(/^(?:## |(?:Q?\d+\.))\s*.*\n?/, '').trim();
-            
-            let marks: number | null = null;
-            const marksMatch = heading.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
-            if (marksMatch) {
-                marks = parseInt(marksMatch[1], 10);
-                heading = heading.replace(marksMatch[0], '').trim();
-            } else {
-                const bodyMarksMatch = body.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
-                if (bodyMarksMatch) {
-                    marks = parseInt(bodyMarksMatch[1], 10);
-                }
-            }
-
-            let year: number | null = fallbackYear;
-            const yearMatch = heading.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
-            if (yearMatch) {
-                year = parseInt(yearMatch[1], 10);
-                heading = heading.replace(yearMatch[0], '').trim();
-            } else {
-                const bodyYearMatch = body.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
-                if (bodyYearMatch) {
-                    year = parseInt(bodyYearMatch[1], 10);
-                }
-            }
-
-            heading = heading.replace(/^[\s\-\:]+|[\s\-\:]+$/g, '').trim();
-
-            if (heading.length > 3 || body.length > 5) {
-                const chunk_text = body ? `${heading}\n\n${body}` : heading;
-                chunks.push({ topic: fallbackTopic, chunk_text: chunk_text.trim(), marks, year });
-            }
-        } else if (trimmed.length > 10) {
-            let marks: number | null = null;
-            const marksMatch = trimmed.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
-            if (marksMatch) marks = parseInt(marksMatch[1], 10);
-
-            let year: number | null = fallbackYear;
-            const yearMatch = trimmed.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
-            if (yearMatch) year = parseInt(yearMatch[1], 10);
-
-            chunks.push({ topic: fallbackTopic, chunk_text: trimmed, marks, year });
-        }
-    }
-
-    return chunks;
-}
-
-function chunkByHeadings(content: string, fallbackTopic: string): Array<{ heading: string; body: string }> {
-    const chunks: Array<{ heading: string; body: string }> = [];
-    const sections = content.split(/^(?=## )/m);
-
-    for (const section of sections) {
-        const trimmed = section.trim();
-        if (!trimmed) continue;
-
-        const headingMatch = trimmed.match(/^## (.+)/);
-        if (headingMatch) {
-            const heading = headingMatch[1].trim();
-            const body = trimmed.replace(/^## .+\n?/, '').trim();
-            if (body.length > 20) {
-                chunks.push({ heading, body });
-            }
-        } else if (trimmed.length > 20) {
-            chunks.push({ heading: fallbackTopic, body: trimmed });
-        }
-    }
-
-    return chunks;
-}
-
-function extractSubtopics(chunkText: string): string[] {
-    if (!chunkText || chunkText.trim() === '') return [];
-    const lines = chunkText.split(/\r?\n/);
-    const subtopics: string[] = [];
-    for (const line of lines) {
-        const match = line.match(/^\s*[-*•]\s+(.+)/);
-        if (match && match[1].trim().length > 4) {
-            subtopics.push(match[1].trim());
-        }
-    }
-    return subtopics;
-}
 
 // ---------------------------------------------------------------------------
 // Worker Implementation
@@ -212,11 +113,19 @@ export const processJob = async (job: any) => {
                 let syllabusUuid = syllabusRes.rows[0]?.id;
                 
                 if (!syllabusUuid) {
+                    // Resolve the session host to use as the uploader,
+                    // avoiding the previously hardcoded `uploaded_by = 1` assumption.
+                    const hostRes = await pool.query(
+                        `SELECT host_id FROM sessions WHERE id = $1 LIMIT 1`,
+                        [session_id]
+                    );
+                    const hostId = hostRes.rows[0]?.host_id ?? null;
+
                     const syllabusInsert = await pool.query(
                         `INSERT INTO syllabi (session_id, file_name, file_url, raw_text, uploaded_by)
-                         VALUES ($1, 'Default Syllabus', 'default', 'System Generated default syllabus', 1)
+                         VALUES ($1, 'Default Syllabus', 'default', 'System Generated default syllabus', $2)
                          RETURNING id`,
-                        [session_id]
+                        [session_id, hostId]
                     );
                     syllabusUuid = syllabusInsert.rows[0].id;
                 }
@@ -299,45 +208,123 @@ export const processJob = async (job: any) => {
         await queueSubsequentJob(session_id, 'ANALYTICS_REBUILD');
 
     } else if (job_type === 'ANALYTICS_REBUILD') {
-        // Pre-compute topic analytics and question analytics
+        // ── Phase 2: Algorithmic Refinement ──────────────────────────────────
+        //
+        // Compute three metrics per topic:
+        //   1. appearance_frequency  – count of mapped raw_questions
+        //   2. recency_index         – how recently the topic appeared in exam papers
+        //                              Formula: 1.0 for the latest year, minus 0.1
+        //                              per calendar year older, floored at 0.00.
+        //   3. syllabus_coverage_pct – fraction of all topics in the session's
+        //                              syllabi that have at least one raw question.
+        //                              Stored on every topic row for the session.
+        // ─────────────────────────────────────────────────────────────────────
+
+        // Fetch all topics for this session (joined through syllabi).
         const topicsRes = await pool.query(
-            `SELECT t.id, t.name, s.session_id 
-             FROM topics t 
-             JOIN syllabi s ON t.syllabus_id = s.id 
+            `SELECT t.id, t.name, s.session_id
+             FROM topics t
+             JOIN syllabi s ON t.syllabus_id = s.id
              WHERE s.session_id = $1`,
             [session_id]
         );
 
+        const totalTopicCount = topicsRes.rows.length;
+
+        // ── recency_index: year-based decay ──────────────────────────────────
+        // Fetch distinct years of all papers uploaded for this session.
+        const yearsRes = await pool.query(
+            `SELECT DISTINCT year
+             FROM papers
+             WHERE session_id = $1 AND year IS NOT NULL
+             ORDER BY year DESC`,
+            [session_id]
+        );
+        const maxYear: number | null = yearsRes.rows.length > 0 ? yearsRes.rows[0].year : null;
+
+        // Build a map: topic_id → latest year from any paper whose raw_questions
+        // reference that topic.
+        const topicYearRes = await pool.query(
+            `SELECT rq.topic_id, MAX(p.year) AS latest_year
+             FROM raw_questions rq
+             JOIN papers p ON rq.paper_id = p.id
+             WHERE p.session_id = $1
+               AND rq.topic_id IS NOT NULL
+               AND p.year IS NOT NULL
+             GROUP BY rq.topic_id`,
+            [session_id]
+        );
+        const topicLatestYear = new Map<string, number>(
+            topicYearRes.rows.map((r: any) => [r.topic_id, r.latest_year])
+        );
+
+        // ── syllabus_coverage_pct: topics with ≥ 1 question ──────────────────
+        // Count how many topics have at least one mapped raw question.
+        const coveredTopicRes = await pool.query(
+            `SELECT COUNT(DISTINCT rq.topic_id)::int AS covered
+             FROM raw_questions rq
+             JOIN topics t ON rq.topic_id = t.id
+             JOIN syllabi s ON t.syllabus_id = s.id
+             WHERE s.session_id = $1`,
+            [session_id]
+        );
+        const coveredTopicCount: number = coveredTopicRes.rows[0]?.covered ?? 0;
+        const coveragePct: number =
+            totalTopicCount > 0
+                ? parseFloat(((coveredTopicCount / totalTopicCount) * 100).toFixed(2))
+                : 0.00;
+
+        // ── Per-topic upsert ──────────────────────────────────────────────────
         for (const topicRow of topicsRes.rows) {
-            // Count frequency from raw_questions
+            // 1. Frequency
             const countRes = await pool.query(
-                `SELECT COUNT(*)::int AS count 
-                 FROM raw_questions 
+                `SELECT COUNT(*)::int AS count
+                 FROM raw_questions
                  WHERE topic_id = $1`,
                 [topicRow.id]
             );
-            const frequency = countRes.rows[0]?.count || 0;
+            const frequency: number = countRes.rows[0]?.count ?? 0;
+
+            // 2. Priority score & label
             const priorityScore = frequency * 2.5;
             let priorityLabel = 'Low';
             if (priorityScore >= 10.0) priorityLabel = 'Very High';
             else if (priorityScore >= 5.0) priorityLabel = 'High';
             else if (priorityScore >= 2.5) priorityLabel = 'Medium';
 
+            // 3. Recency index
+            //    If the topic appears in papers, compare its most-recent year to
+            //    the session's overall latest year.
+            //    recency_index = max(0, 1.0 − 0.1 × (maxYear − topicLatestYear))
+            let recencyIndex = 0.00;
+            const topicYear = topicLatestYear.get(topicRow.id) ?? null;
+            if (topicYear !== null && maxYear !== null) {
+                const yearDelta = maxYear - topicYear;
+                recencyIndex = parseFloat(Math.max(0, 1.0 - yearDelta * 0.1).toFixed(2));
+            }
+
+            // 4. Syllabus coverage pct is session-wide (same value for every topic row)
             await pool.query(
-                `INSERT INTO topic_analytics (topic_id, session_id, appearance_frequency, priority_score, priority_label)
-                 VALUES ($1, $2, $3, $4, $5)
-                 ON CONFLICT (topic_id, session_id) DO UPDATE 
-                 SET appearance_frequency = EXCLUDED.appearance_frequency,
-                     priority_score = EXCLUDED.priority_score,
-                     priority_label = EXCLUDED.priority_label,
-                     last_rebuilt_at = NOW()`,
-                [topicRow.id, session_id, frequency, priorityScore, priorityLabel]
+                `INSERT INTO topic_analytics
+                     (topic_id, session_id, appearance_frequency,
+                      priority_score, priority_label,
+                      recency_index, syllabus_coverage_pct)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (topic_id, session_id) DO UPDATE
+                     SET appearance_frequency  = EXCLUDED.appearance_frequency,
+                         priority_score        = EXCLUDED.priority_score,
+                         priority_label        = EXCLUDED.priority_label,
+                         recency_index         = EXCLUDED.recency_index,
+                         syllabus_coverage_pct = EXCLUDED.syllabus_coverage_pct,
+                         last_rebuilt_at       = NOW()`,
+                [topicRow.id, session_id, frequency, priorityScore, priorityLabel,
+                 recencyIndex, coveragePct]
             );
         }
 
-        // Rebuild question analytics
+        // ── Question analytics rebuild ────────────────────────────────────────
         const questionsRes = await pool.query(
-            `SELECT cq.id 
+            `SELECT cq.id
              FROM canonical_questions cq
              JOIN topics t ON cq.topic_id = t.id
              JOIN syllabi s ON t.syllabus_id = s.id
@@ -347,12 +334,12 @@ export const processJob = async (job: any) => {
 
         for (const qRow of questionsRes.rows) {
             const countRes = await pool.query(
-                `SELECT COUNT(*)::int AS count 
-                 FROM question_variants 
+                `SELECT COUNT(*)::int AS count
+                 FROM question_variants
                  WHERE canonical_question_id = $1`,
                 [qRow.id]
             );
-            const frequency = countRes.rows[0]?.count || 0;
+            const frequency: number = countRes.rows[0]?.count ?? 0;
             let priorityLabel = 'Low';
             if (frequency >= 3) priorityLabel = 'High';
             else if (frequency >= 2) priorityLabel = 'Medium';
@@ -360,10 +347,10 @@ export const processJob = async (job: any) => {
             await pool.query(
                 `INSERT INTO question_analytics (canonical_question_id, appearance_frequency, priority_label)
                  VALUES ($1, $2, $3)
-                 ON CONFLICT (canonical_question_id) DO UPDATE 
-                 SET appearance_frequency = EXCLUDED.appearance_frequency,
-                     priority_label = EXCLUDED.priority_label,
-                     last_rebuilt_at = NOW()`,
+                 ON CONFLICT (canonical_question_id) DO UPDATE
+                     SET appearance_frequency = EXCLUDED.appearance_frequency,
+                         priority_label        = EXCLUDED.priority_label,
+                         last_rebuilt_at       = NOW()`,
                 [qRow.id, frequency, priorityLabel]
             );
         }
