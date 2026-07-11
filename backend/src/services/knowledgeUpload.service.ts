@@ -209,7 +209,21 @@ const resolveV2KnowledgeFile = async (
     client: QueryRunner,
     fileId: string | number
 ): Promise<V2KnowledgeFileRef | null> => {
-    const uuid = String(fileId).trim();
+    let uuid = String(fileId).trim();
+
+    // Check if the fileId is a legacy integer ID mapped in migration_file_uuid_map
+    try {
+        const mapRes = await client.query(
+            `SELECT new_uuid FROM migration_file_uuid_map WHERE old_file_id::text = $1 LIMIT 1`,
+            [uuid]
+        );
+        if (mapRes.rows.length > 0) {
+            uuid = mapRes.rows[0].new_uuid;
+        }
+    } catch (e) {
+        // Table may not exist (e.g. dropped in production cleanup), ignore and proceed
+    }
+
     const uuidRes = await client.query(
         `SELECT 'paper'::text AS kind, id, pdf_url AS storage_url, title AS original_name
            FROM papers WHERE id::text = $1
@@ -397,6 +411,16 @@ export const deleteKnowledgeFile = async (fileId: number | string, sessionId: nu
                 `DELETE FROM uploaded_notes WHERE id = $1`,
                 [v2Ref.uuid]
             );
+        }
+
+        // Clean up the migration mapping if it exists
+        try {
+            await client.query(
+                `DELETE FROM migration_file_uuid_map WHERE new_uuid = $1`,
+                [v2Ref.uuid]
+            );
+        } catch (e) {
+            // Ignore if the table migration_file_uuid_map doesn't exist
         }
 
         await client.query('COMMIT');

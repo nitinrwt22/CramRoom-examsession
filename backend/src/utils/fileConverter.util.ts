@@ -118,43 +118,64 @@ export function parsePyqContent(
     fallbackYear: number | null
 ): Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> {
     const chunks: Array<{ topic: string; chunk_text: string; marks: number | null; year: number | null }> = [];
-    const sections = content.split(/^(?=## |(?:Q?\d+\.)(?:\s+|$))/m);
+    
+    // Split content by ## headings or question starters (Q1, 1., etc.)
+    // Matches at start of string or following whitespace, optionally bolded or bulleted.
+    // 1) ## headings
+    // 2) Inline Q1, Q2, etc. (requires Q prefix)
+    // 3) Line-start raw numbers like 1., 1), (1) (requires newline/start of line, optional list bullet, and punctuation/brackets)
+    const sections = content.split(/(?=## |(?:^|\s)(?:\s*[-*•]\s*)?(?:\*\*)?(?:Q|Question|Que|Q\s*No)\.?\s*\d+\s*(?:\.|\)|:|-|\b)(?:\s*(?:\([^)]*\)|\[[^\]]*\]))?\s*(?:\*\*)?\s*(?::|-)?(?:\s+|$)|^(?:\s*[-*•]\s*)?(?:\*\*|)?(?:\(|\[)?\d+\s*(?:\.|\)|:|\]|-|(?:\s*(?:\([^)]*\)|\[[^\]]*\])))\s*(?:\*\*)?\s*(?::|-)?(?:\s+|$))/mi);
+
+    // Matches any of the above prefixes at the start of a section
+    const prefixRegex = /^(?:##\s*|(?:\s*[-*•]\s*)?(?:\*\*)?(?:(?:Q|Question|Que|Q\s*No)\.?\s*\d+\s*(?:\.|\)|:|-|\b)|(?:\(|\[)?\d+\s*(?:\.|\)|:|\]|-|(?:\s*(?:\([^)]*\)|\[[^\]]*\]))))\s*(?:\([^)]*\)|\[[^\]]*\])?\s*(?:\*\*)?\s*(?::|-)?\s*)/i;
 
     for (const section of sections) {
         const trimmed = section.trim();
         if (!trimmed) continue;
 
-        const headingMatch = trimmed.match(/^(?:## |(?:Q?\d+\.))\s*(.*)/);
-        if (headingMatch && headingMatch[1].trim()) {
-            let heading = headingMatch[1].trim();
-            let body = trimmed.replace(/^(?:## |(?:Q?\d+\.))\s*.*\n?/, '').trim();
+        const prefixMatch = trimmed.match(prefixRegex);
+        if (prefixMatch) {
+            const prefix = prefixMatch[0];
+            const firstLine = trimmed.split('\n')[0];
+            let heading = firstLine.substring(prefix.length).trim();
+            let body = trimmed.substring(firstLine.length).trim();
 
             let marks: number | null = null;
-            const marksMatch = heading.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
+            const marksMatch = prefix.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
             if (marksMatch) {
                 marks = parseInt(marksMatch[1], 10);
-                heading = heading.replace(marksMatch[0], '').trim();
             } else {
-                const bodyMarksMatch = body.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
-                if (bodyMarksMatch) {
-                    marks = parseInt(bodyMarksMatch[1], 10);
+                const headingMarksMatch = heading.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
+                if (headingMarksMatch) {
+                    marks = parseInt(headingMarksMatch[1], 10);
+                    heading = heading.replace(headingMarksMatch[0], '').trim();
+                } else {
+                    const bodyMarksMatch = body.match(/(?:\[|\()?\s*(\d+)\s*(?:marks?|m)\s*(?:\]|\))?/i);
+                    if (bodyMarksMatch) {
+                        marks = parseInt(bodyMarksMatch[1], 10);
+                    }
                 }
             }
 
             let year: number | null = fallbackYear;
-            const yearMatch = heading.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
+            const yearMatch = prefix.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
             if (yearMatch) {
                 year = parseInt(yearMatch[1], 10);
-                heading = heading.replace(yearMatch[0], '').trim();
             } else {
-                const bodyYearMatch = body.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
-                if (bodyYearMatch) {
-                    year = parseInt(bodyYearMatch[1], 10);
+                const headingYearMatch = heading.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
+                if (headingYearMatch) {
+                    year = parseInt(headingYearMatch[1], 10);
+                    heading = heading.replace(headingYearMatch[0], '').trim();
+                } else {
+                    const bodyYearMatch = body.match(/(?:\[|\()?\s*(20\d{2})\s*(?:\]|\))?/);
+                    if (bodyYearMatch) {
+                        year = parseInt(bodyYearMatch[1], 10);
+                    }
                 }
             }
 
-            // Clean up heading punctuation
-            heading = heading.replace(/^[\s\-\:]+|[\s\-\:]+$/g, '').trim();
+            // Clean up heading punctuation and bold symbols
+            heading = heading.replace(/^[\s\-\:\*]+|[\s\-\:\*]+$/g, '').trim();
 
             if (heading.length > 3 || body.length > 5) {
                 const chunk_text = body ? `${heading}\n\n${body}` : heading;

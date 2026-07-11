@@ -183,10 +183,10 @@ router.get('/:id/knowledge', async (req: AuthRequest, res) => {
 router.delete('/:id/knowledge/:fileId', async (req: AuthRequest, res) => {
     try {
         const sessionId = parseInt(req.params.id);
-        const fileId = parseInt(req.params.fileId);
+        const fileId = req.params.fileId;
         const userId = req.user.id;
 
-        if (isNaN(sessionId) || isNaN(fileId)) {
+        if (isNaN(sessionId) || !fileId) {
             res.status(400).json({ error: 'Invalid session or file ID' });
             return;
         }
@@ -207,10 +207,10 @@ router.delete('/:id/knowledge/:fileId', async (req: AuthRequest, res) => {
 router.get('/:id/knowledge/:fileId/download', async (req: AuthRequest, res) => {
     try {
         const sessionId = parseInt(req.params.id);
-        const fileId = parseInt(req.params.fileId);
+        const fileId = req.params.fileId;
         const userId = req.user.id;
 
-        if (isNaN(sessionId) || isNaN(fileId)) {
+        if (isNaN(sessionId) || !fileId) {
             res.status(400).json({ error: 'Invalid session or file ID' });
             return;
         }

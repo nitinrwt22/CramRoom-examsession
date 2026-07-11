@@ -79,7 +79,7 @@ const suite = (name: string) => {
     console.log('─'.repeat(60));
 };
 
-const eq = <T>(actual: T, expected: T, label: string) => {
+const eq = <T>(actual: T, expected: T, label: string = 'Assertion failed') => {
     const a = JSON.stringify(actual);
     const e = JSON.stringify(expected);
     if (a !== e) {
@@ -571,7 +571,52 @@ const runPyqTests = async () => {
     await test('3.22 double-digit numbered question is recognised', () => {
         const md = "10. Explain the banker's algorithm in great technical detail.";
         const r = parsePyqContent(md, 'OS', 2024);
-        eq(r.length, 1);
+        eq(r.length, 1, 'should have 1 chunk');
+    });
+
+    // 3.23 Inline multiple bold questions with marks (User's specific case)
+    await test('3.23 inline multiple bold questions with marks are split and parsed correctly', () => {
+        const md = "**Q1 (2 Marks):** Define electric dipole moment. Write its SI unit. **Q2 (3 Marks):** State Kirchhoff's voltage law and Kirchhoff's current law. Use them to justify conservation of charge and energy in an electrical circuit. **Q3 (3 Marks):** A convex lens of focal length 20 cm forms a real image 3 times the size of the object. Calculate the object and image distances. **Q4 (5 Marks):** Derive an expression for the electric field on the axial line of an electric dipole at a distance r from its center. Show that for r >> a, the field varies as 1/r³. **Q5 (10 Marks):** (a) Explain the photoelectric effect and state the laws governing it. (b) Using Einstein's photoelectric equation, derive the relation between stopping potential and frequency of incident light. (c) A photon of energy 4.5 eV strikes a metal surface with work function 2.3 eV. Find the maximum kinetic energy of the emitted photoelectron and the stopping potential.";
+        const r = parsePyqContent(md, 'Physics', 2026);
+        eq(r.length, 5, 'should split into 5 chunks');
+        eq(r[0].marks, 2, 'Q1 marks');
+        truthy(r[0].chunk_text.includes('Define electric dipole moment'), 'Q1 body');
+        eq(r[1].marks, 3, 'Q2 marks');
+        truthy(r[1].chunk_text.includes("State Kirchhoff's voltage law"), 'Q2 body');
+        eq(r[2].marks, 3, 'Q3 marks');
+        truthy(r[2].chunk_text.includes('A convex lens of focal length 20 cm'), 'Q3 body');
+        eq(r[3].marks, 5, 'Q4 marks');
+        truthy(r[3].chunk_text.includes('Derive an expression for the electric field'), 'Q4 body');
+        eq(r[4].marks, 10, 'Q5 marks');
+        truthy(r[4].chunk_text.includes('Explain the photoelectric effect'), 'Q5 body');
+        // Q5 subparts (a), (b), (c) should remain within Q5 and not be split
+        truthy(r[4].chunk_text.includes('(b) Using Einstein'), 'Q5 subpart b remains inline');
+        truthy(r[4].chunk_text.includes('(c) A photon of energy 4.5 eV'), 'Q5 subpart c remains inline');
+    });
+
+    // 3.24 Bulleted bold questions
+    await test('3.24 bulleted bold questions are parsed correctly', () => {
+        const md = [
+            '- **Q1 (5 Marks):** First question.',
+            '* **Q2:** Second question.',
+        ].join('\n');
+        const r = parsePyqContent(md, 'OS', 2024);
+        eq(r.length, 2, 'should split into 2 chunks');
+        eq(r[0].marks, 5, 'Q1 marks');
+        eq(r[0].chunk_text, 'First question.', 'Q1 body');
+        eq(r[1].chunk_text, 'Second question.', 'Q2 body');
+    });
+
+    // 3.25 Parenthesized/bracketed numbers at start of line
+    await test('3.25 parenthesized and bracketed numbers at start of line are parsed', () => {
+        const md = [
+            '(1) Explain virtual memory.',
+            '[2] Explain paging.',
+        ].join('\n');
+        const r = parsePyqContent(md, 'OS', 2024);
+        eq(r.length, 2, 'should split into 2 chunks');
+        eq(r[0].chunk_text, 'Explain virtual memory.', 'Q1 body');
+        eq(r[1].chunk_text, 'Explain paging.', 'Q2 body');
     });
 };
 
