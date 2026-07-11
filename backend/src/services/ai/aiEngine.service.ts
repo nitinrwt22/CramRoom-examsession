@@ -1,21 +1,103 @@
 
 import { SessionContext } from '../sessionContext.service';
-import { DummyAIProvider } from './aiProvider';
+import { createLLMProvider } from './aiProvider';
 import { getChunkSummaries, getUnchunkedMessages } from '../../models/sessionAiChunk.model';
 import { detectWeakTopics } from './weakTopicAnalytics.service';
 import { logAIEvent } from "../../utils/aiLogger";
-import { selectRelevantChunks } from './knowledgeRetrieval.service';
+import { selectRelevantChunks, selectChunksBySource } from './knowledgeRetrieval.service';
 import pool from '../../config/database';
 
+// ---------------------------------------------------------------------------
+// Shared Constants & Helpers (Phase 3)
+// ---------------------------------------------------------------------------
+
 /**
- * 1. AIIntent
+ * FORMATTING_RULES
+ * Appended to every system prompt to enforce answer presentation standards.
+ *
+ * Rules (from TOPIC_SYSTEM_V2_DESIGN.md § 8.4 — Flowchart-first Answer Strategy):
+ *   - Use plain-text (ASCII/markdown) for all diagrams and flowcharts.
+ *   - Prefer structured tables and bullet lists for multi-part answers.
+ *   - Explicitly prohibit generating graphical, SVG, or image-based layouts.
+ */
+export const FORMATTING_RULES = `
+Formatting Rules (Mandatory):
+- Use only plain text (ASCII/markdown). Do NOT generate images, SVGs, or graphical diagrams.
+- Show processes as ASCII flowcharts using arrows (-->, ->, |) and boxes ([Step]).
+- Present comparisons in markdown tables (| Col | Col |).
+- Use numbered lists for steps and bullet points (-) for features.
+- Keep answers concise and exam-focused. Avoid motivational or casual language.
+`.trim();
+
+/**
+ * SOURCE_LABEL maps a chunk source to a human-readable prompt heading.
+ */
+const SOURCE_LABEL: Record<'syllabus' | 'pyq' | 'notes', string> = {
+    syllabus: 'Syllabus Grounding (Primary Context)',
+    pyq:      'PYQ Historical Evidence',
+    notes:    'Uploaded Notes (Style & Supporting Context)',
+};
+
+/**
+ * buildHierarchicalKnowledgeBlock()
+ *
+ * Assembles the RAG context prompt block following the grounding hierarchy:
+ *   Syllabus (Primary) → PYQ (Evidence) → Notes (Style/Supporting)
+ *
+ * Each source tier is injected under a labelled heading so the model
+ * understands the epistemic weight of each block.
+ *
+ * Notes cannot override syllabus facts (enforced by ordering — syllabus
+ * is presented first as the anchor).
+ *
+ * @param question - User question string (used for TF-IDF relevance scoring)
+ * @param chunks   - All knowledge chunks from SessionContext (must carry `source`)
+ * @param topK     - Maximum chunks to inject across all tiers (default: 6)
+ * @returns        - Formatted multi-tier context string, or empty string if no chunks
+ */
+export function buildHierarchicalKnowledgeBlock(
+    question: string,
+    chunks: Array<{ topic: string; text: string; source: 'syllabus' | 'pyq' | 'notes' }>,
+    topK = 6
+): string {
+    if (chunks.length === 0) return '';
+
+    const selected = selectChunksBySource(question, chunks, topK);
+    if (selected.length === 0) return '';
+
+    // Group by source
+    const bySource: Record<string, typeof selected> = { syllabus: [], pyq: [], notes: [] };
+    for (const chunk of selected) {
+        bySource[chunk.source].push(chunk);
+    }
+
+    const sections: string[] = [];
+
+    for (const src of ['syllabus', 'pyq', 'notes'] as const) {
+        const tier = bySource[src];
+        if (tier.length === 0) continue;
+
+        const body = tier
+            .map(c => `[${c.topic}]\n${c.text}`)
+            .join('\n\n---\n\n');
+
+        sections.push(`${SOURCE_LABEL[src]}:\n${body}`);
+    }
+
+    return sections.length > 0
+        ? `\n\nKnowledge Context:\n${sections.join('\n\n===\n\n')}`
+        : '';
+}
+
+
+/**
+ * AIIntent
  * Define allowed intents for the AI Engine.
- * For now, strictly limited to 'concept_clarification'.
  */
 export type AIIntent = 'concept_clarification' | 'revision_guidance' | 'chunk_summary' | 'session_summary' | 'pyq_answer_generation';
 
 /**
- * 2. AIEngineInput
+ * AIEngineInput
  * Structure of the input expected by the AI Engine.
  * Includes the full session context, the user's intent, and their specific question.
  */
@@ -36,286 +118,208 @@ export interface AIEngineResponse {
     sourcesUsed: string[];
 }
 
-/**
- * Handler for 'concept_clarification' intent.
- * Currently returns a placeholder response as AI integration is not yet implemented.
- * 
- * @param input - The input for the AI engine.
- * @returns A placeholder AIEngineResponse.
- */
+// ---------------------------------------------------------------------------
+// Intent: concept_clarification
+// ---------------------------------------------------------------------------
+
 const handleConceptClarification = async (input: AIEngineInput): Promise<AIEngineResponse> => {
-    const provider = new DummyAIProvider();
+    const provider = createLLMProvider();
     const { context, question } = input;
 
-    // 1. Construct System Prompt
-    const systemPrompt = `
-You are an AI exam assistant. Your goal is to help students prepare for upcoming exams.
-- Provide clear, structured, and exam-focused explanations.
-- Do NOT provide motivational or casual conversation.
-- If you do not know the answer, admit it clearly.
-- Keep answers concise and relevant to the exam syllabus.
-`.trim();
+    // 1. System Prompt
+    const systemPrompt = [
+        `You are an AI exam assistant. Your goal is to help students prepare for upcoming exams.`,
+        `- Provide clear, structured, and exam-focused explanations.`,
+        `- Do NOT provide motivational or casual conversation.`,
+        `- If you do not know the answer, admit it clearly.`,
+        `- Keep answers concise and relevant to the exam syllabus.`,
+        ``,
+        FORMATTING_RULES,
+    ].join('\n');
 
-    // 2. Construct Session Context Prompt
-    const { sessionMeta, timeContext, flags, materials } = context;
-    const materialNames = materials.files.length > 0
-        ? materials.files.map(f => f.name).join(', ')
-        : "None";
+    // 2. Session context header
+    const { sessionMeta, timeContext, flags } = context;
+    const sessionHeader = [
+        `Session Context:`,
+        `- Subject: ${sessionMeta.subject}`,
+        `- Exam Date: ${sessionMeta.examDate} (in ${timeContext.examInDays} days)`,
+        `- Session Status: ${flags.isActive ? 'Active' : 'Expired'}`,
+    ].join('\n');
 
-    const contextPrompt = `
-Session Context:
-- Subject: ${sessionMeta.subject}
-- Exam Date: ${sessionMeta.examDate} (in ${timeContext.examInDays} days)
-- Session Status: ${flags.isActive ? "Active" : "Expired"}
-- Available Study Materials: ${materialNames}
-`.trim();
-
-    // 3b. Inject relevant knowledge chunks (keyword-ranked)
-    let knowledgeBlock = '';
+    // 3. Hierarchical knowledge block (Syllabus → PYQ → Notes)
     const allChunks = context.knowledge?.chunks || [];
-    const relevantChunks = selectRelevantChunks(question, allChunks, 5);
-    if (relevantChunks.length > 0) {
-        const knowledgeText = relevantChunks
-            .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
-            .join('\n\n---\n\n');
-        knowledgeBlock = `\n\nKnowledge Base (from uploaded study materials):\n${knowledgeText}`;
-    }
+    const knowledgeBlock = buildHierarchicalKnowledgeBlock(question, allChunks, 6);
 
-    // 3c. Inject recent conversation history
+    // 4. Recent conversation history
     let historyBlock = '';
     const recentHistory = context.recentHistory || [];
     if (recentHistory.length > 0) {
         const historyText = recentHistory
-            .map((msg) => `Q: ${msg.question}\nA: ${msg.answer}`)
+            .map(msg => `Q: ${msg.question}\nA: ${msg.answer}`)
             .join('\n\n');
         historyBlock = `\n\nRecent Conversation (use for continuity):\n${historyText}`;
     }
 
-    // 3. Construct Intent-Specific Prompt
-    const intentPrompt = `
-Intent: Concept Clarification
-- Explain the concept clearly using potential bullet points.
-- Keep depth suitable for an exam context.
-- Use examples only if they significantly improve clarity.
-`.trim();
+    // 5. Intent-specific instructions
+    const intentPrompt = [
+        `Intent: Concept Clarification`,
+        `- Explain the concept clearly using bullet points.`,
+        `- Keep depth suitable for an exam context.`,
+        `- Use examples only if they significantly improve clarity.`,
+    ].join('\n');
 
-    // 4. Construct User Prompt
-    const userPrompt = `
-Question: ${question}
-`.trim();
+    const contextPrompt = `${sessionHeader}${knowledgeBlock}${historyBlock}`;
+    const userPrompt = `Question: ${question}`;
 
-    // NOTE: In a real implementation, we might combine these differently depending on the provider's API.
-    // For now, we follow the interface structure.
-
-    // Call AI provider
-    const sessionId = context.sessionMeta.sessionId;
-    const startTime = Date.now();
-    let aiResponse;
-    try {
-        aiResponse = await provider.generateResponse({
-            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
-            contextPrompt: contextPrompt + knowledgeBlock + historyBlock,
-            userPrompt
-        });
-
-        const durationMs = Date.now() - startTime;
-        logAIEvent({
-            type: "AI_CALL",
-            sessionId,
-            intent: input.intent,
-            durationMs,
-            metadata: {
-                responseLength: aiResponse.text.length
-            }
-        });
-    } catch (error: any) {
-        logAIEvent({
-            type: "AI_ERROR",
-            sessionId,
-            intent: input.intent,
-            metadata: {
-                error: error.message
-            }
-        });
-        throw error;
-    }
-
-    // Extract sources if any (simple heuristic for now, matching material names in answer)
-    // In a real scenario, the LLM might return cited sources explicitly.
-    const sourcesUsed = materials.files
-        .filter(f => aiResponse.text.includes(f.name))
-        .map(f => f.name);
-
-    return {
-        answer: aiResponse.text,
-        confidence: "low",
-        sourcesUsed: sourcesUsed
-    };
-};
-
-
-
-/**
- * Handler for 'revision_guidance' intent.
- * Provides structured exam preparation advice.
- */
-const handleRevisionGuidance = async (input: AIEngineInput): Promise<AIEngineResponse> => {
-    const provider = new DummyAIProvider();
-    const { context } = input;
-    const { sessionMeta, timeContext, flags, materials } = context;
-
-    // 1. Construct System Prompt (SYSTEM RULES)
-    const systemPrompt = `
-You are an AI exam assistant. Your goal is to help students prepare for upcoming exams.
-- Exam-focused
-- Structured output only
-- No casual language
-- No generic motivational advice
-- If you do not know the answer, admit it clearly.
-`.trim();
-
-    // 2. Construct Session Context Prompt (CONTEXT BLOCK)
-    const materialNames = materials.files.length > 0
-        ? materials.files.map(f => f.name).join(', ')
-        : "None";
-
-    let contextPrompt = `
-Session Context:
-- Subject: ${sessionMeta.subject}
-- examInDays: ${timeContext.examInDays}
-- timeRemainingInHours: ${timeContext.timeRemainingInHours}
-- Session Status: ${flags.isActive ? "Active" : "Inactive"}
-- List of material names: ${materialNames}
-`.trim();
-
-    // Check for PYQ
-    const hasPYQ = materials.files.some(f =>
-        f.name.toLowerCase().includes('pyq') ||
-        f.name.toLowerCase().includes('previous')
-    );
-
-    if (hasPYQ) {
-        contextPrompt += "\nPYQ materials detected. Prioritize repeated patterns.";
-    }
-
-    // Inject relevant knowledge chunks (keyword-ranked)
-    const allChunksRev = context.knowledge?.chunks || [];
-    const relevantChunksRev = selectRelevantChunks(input.question || '', allChunksRev, 5);
-    if (relevantChunksRev.length > 0) {
-        const knowledgeText = relevantChunksRev
-            .slice(0, 6)
-            .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
-            .join('\n\n---\n\n');
-        contextPrompt += `\n\nKnowledge Base (from uploaded study materials):\n${knowledgeText}`;
-    }
-
-    // Inject recent conversation history
-    const recentHistoryRev = context.recentHistory || [];
-    if (recentHistoryRev.length > 0) {
-        const historyText = recentHistoryRev
-            .map((msg) => `Q: ${msg.question}\nA: ${msg.answer}`)
-            .join('\n\n');
-        contextPrompt += `\n\nRecent Conversation (use for continuity):\n${historyText}`;
-    }
-
-    // 3. Construct Intent-Specific Prompt (INTENT RULES)
-    const intentPrompt = `
-Intent: Revision Guidance
-AI must respond in this strict format:
-
-Exam Urgency Level:
-<High / Medium / Low>
-
-Top Priority Topics:
-1.
-2.
-3.
-
-Recommended PYQ Focus:
--
-
-Suggested 2-Hour Revision Plan:
--
-`.trim();
-
-    // 4. Combine Prompts and Call AI Provider
-    const sessionId = context.sessionMeta.sessionId;
+    const sessionId = sessionMeta.sessionId;
     const startTime = Date.now();
     let aiResponse;
     try {
         aiResponse = await provider.generateResponse({
             systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
             contextPrompt,
-            userPrompt: input.question || "Generate revision guidance."
+            userPrompt
         });
-
-        const durationMs = Date.now() - startTime;
-        logAIEvent({
-            type: "AI_CALL",
-            sessionId,
-            intent: input.intent,
-            durationMs,
-            metadata: {
-                responseLength: aiResponse.text.length
-            }
-        });
+        logAIEvent({ type: 'AI_CALL', sessionId, intent: input.intent, durationMs: Date.now() - startTime, metadata: { responseLength: aiResponse.text.length } });
     } catch (error: any) {
-        logAIEvent({
-            type: "AI_ERROR",
-            sessionId,
-            intent: input.intent,
-            metadata: {
-                error: error.message
-            }
-        });
+        logAIEvent({ type: 'AI_ERROR', sessionId, intent: input.intent, metadata: { error: error.message } });
         throw error;
     }
 
-    // 6. Return AIEngineResponse
+    const sourcesUsed = context.materials.files
+        .filter(f => aiResponse.text.includes(f.name))
+        .map(f => f.name);
+
+    return { answer: aiResponse.text, confidence: 'low', sourcesUsed };
+};
+
+
+// ---------------------------------------------------------------------------
+// Intent: revision_guidance
+// ---------------------------------------------------------------------------
+
+const handleRevisionGuidance = async (input: AIEngineInput): Promise<AIEngineResponse> => {
+    const provider = createLLMProvider();
+    const { context } = input;
+    const { sessionMeta, timeContext, flags } = context;
+
+    // 1. System Prompt
+    const systemPrompt = [
+        `You are an AI exam assistant. Your goal is to help students prepare for upcoming exams.`,
+        `- Exam-focused`,
+        `- Structured output only`,
+        `- No casual language`,
+        `- No generic motivational advice`,
+        `- If you do not know the answer, admit it clearly.`,
+        ``,
+        FORMATTING_RULES,
+    ].join('\n');
+
+    // 2. Session context header
+    const sessionHeader = [
+        `Session Context:`,
+        `- Subject: ${sessionMeta.subject}`,
+        `- Exam In Days: ${timeContext.examInDays}`,
+        `- Time Remaining (hours): ${timeContext.timeRemainingInHours}`,
+        `- Session Status: ${flags.isActive ? 'Active' : 'Inactive'}`,
+    ].join('\n');
+
+    // 3. Hierarchical knowledge block (Syllabus → PYQ → Notes)
+    const allChunks = context.knowledge?.chunks || [];
+    const knowledgeBlock = buildHierarchicalKnowledgeBlock(input.question || '', allChunks, 6);
+
+    // 4. Recent conversation history
+    let historyBlock = '';
+    const recentHistory = context.recentHistory || [];
+    if (recentHistory.length > 0) {
+        const historyText = recentHistory
+            .map(msg => `Q: ${msg.question}\nA: ${msg.answer}`)
+            .join('\n\n');
+        historyBlock = `\n\nRecent Conversation (use for continuity):\n${historyText}`;
+    }
+
+    // 5. Intent-specific format
+    const intentPrompt = [
+        `Intent: Revision Guidance`,
+        `AI must respond in this strict format:`,
+        ``,
+        `Exam Urgency Level:`,
+        `<High / Medium / Low>`,
+        ``,
+        `Top Priority Topics:`,
+        `1.`,
+        `2.`,
+        `3.`,
+        ``,
+        `Recommended PYQ Focus:`,
+        `-`,
+        ``,
+        `Suggested 2-Hour Revision Plan:`,
+        `-`,
+    ].join('\n');
+
+    const contextPrompt = `${sessionHeader}${knowledgeBlock}${historyBlock}`;
+
+    const sessionId = sessionMeta.sessionId;
+    const startTime = Date.now();
+    let aiResponse;
+    try {
+        aiResponse = await provider.generateResponse({
+            systemPrompt: `${systemPrompt}\n\n${intentPrompt}`,
+            contextPrompt,
+            userPrompt: input.question || 'Generate revision guidance.'
+        });
+        logAIEvent({ type: 'AI_CALL', sessionId, intent: input.intent, durationMs: Date.now() - startTime, metadata: { responseLength: aiResponse.text.length } });
+    } catch (error: any) {
+        logAIEvent({ type: 'AI_ERROR', sessionId, intent: input.intent, metadata: { error: error.message } });
+        throw error;
+    }
+
     return {
         answer: aiResponse.text,
-        confidence: "medium",
-        sourcesUsed: materials.files.map(f => f.name)
+        confidence: 'medium',
+        sourcesUsed: context.materials.files.map(f => f.name)
     };
 };
 
-/**
- * Handler for 'chunk_summary' intent.
- * Generates a keyword-focused summary for a chunk of AI interactions.
- * This acts as internal memory compression.
- */
+
+// ---------------------------------------------------------------------------
+// Intent: chunk_summary
+// ---------------------------------------------------------------------------
+
 const handleChunkSummary = async (input: AIEngineInput): Promise<AIEngineResponse> => {
-    const provider = new DummyAIProvider();
+    const provider = createLLMProvider();
 
-    // 1. Construct System Prompt (SYSTEM RULES)
-    const systemPrompt = `
-You are an AI summarizing an exam preparation session.
-- Academic tone
-- Extremely concise
-- Keyword-based output only
-- No explanations
-- No motivational text
-- No repetition
-`.trim();
+    // 1. System Prompt (internal memory compression — no knowledge hierarchy needed)
+    const systemPrompt = [
+        `You are an AI summarizing an exam preparation session.`,
+        `- Academic tone`,
+        `- Extremely concise`,
+        `- Keyword-based output only`,
+        `- No explanations`,
+        `- No motivational text`,
+        `- No repetition`,
+        ``,
+        FORMATTING_RULES,
+    ].join('\n');
 
-    // 2. Construct Intent-Specific Prompt (INTENT RULES)
-    const intentPrompt = `
-Return strictly in this format:
+    // 2. Intent-Specific Prompt
+    const intentPrompt = [
+        `Return strictly in this format:`,
+        ``,
+        `Core Topics:`,
+        `-`,
+        `-`,
+        ``,
+        `Repeated Confusions:`,
+        `-`,
+        `-`,
+        ``,
+        `High-Yield Themes:`,
+        `-`,
+        `-`,
+    ].join('\n');
 
-Core Topics:
--
--
-
-Repeated Confusions:
--
--
-
-High-Yield Themes:
--
--
-`.trim();
-
-    // 3. Call AI Provider (Internal memory compression, no session context needed)
     const sessionId = input.context.sessionMeta.sessionId;
     const startTime = Date.now();
     let aiResponse;
@@ -325,159 +329,110 @@ High-Yield Themes:
             contextPrompt: '',
             userPrompt: input.question
         });
-
-        const durationMs = Date.now() - startTime;
-        logAIEvent({
-            type: "AI_CALL",
-            sessionId,
-            intent: input.intent,
-            durationMs,
-            metadata: {
-                responseLength: aiResponse.text.length
-            }
-        });
+        logAIEvent({ type: 'AI_CALL', sessionId, intent: input.intent, durationMs: Date.now() - startTime, metadata: { responseLength: aiResponse.text.length } });
     } catch (error: any) {
-        logAIEvent({
-            type: "AI_ERROR",
-            sessionId,
-            intent: input.intent,
-            metadata: {
-                error: error.message
-            }
-        });
+        logAIEvent({ type: 'AI_ERROR', sessionId, intent: input.intent, metadata: { error: error.message } });
         throw error;
     }
 
-    return {
-        answer: aiResponse.text,
-        confidence: "high",
-        sourcesUsed: []
-    };
+    return { answer: aiResponse.text, confidence: 'high', sourcesUsed: [] };
 };
 
-/**
- * Handler for 'session_summary' intent.
- * Generates an overall session summary using hierarchical chunk memory.
- */
+
+// ---------------------------------------------------------------------------
+// Intent: session_summary
+// ---------------------------------------------------------------------------
+
 const handleSessionSummary = async (input: AIEngineInput): Promise<AIEngineResponse> => {
-    const provider = new DummyAIProvider();
+    const provider = createLLMProvider();
     const sessionIdStr = input.context.sessionMeta.sessionId;
 
-    // Fetch memory
-    const chunkSummaries = await getChunkSummaries(sessionIdStr);
+    const chunkSummaries    = await getChunkSummaries(sessionIdStr);
     const unchunkedMessages = await getUnchunkedMessages(sessionIdStr);
+    const weakTopics        = await detectWeakTopics(sessionIdStr);
 
-    // Call weak topic analytics
-    const weakTopics = await detectWeakTopics(sessionIdStr);
+    // 1. System Prompt
+    const systemPrompt = [
+        `SYSTEM RULES:`,
+        `- Academic tone`,
+        `- Strategic exam-focused analysis`,
+        `- Structured output only`,
+        `- No motivational language`,
+        ``,
+        `Strict output format:`,
+        ``,
+        `Session Summary:`,
+        ``,
+        `Core Topics Covered:`,
+        `-`,
+        ``,
+        `Common Weak Areas (Evidence-Based):`,
+        `- Include topics from deterministic evidence if valid`,
+        ``,
+        `Frequently Repeated Themes:`,
+        `-`,
+        ``,
+        `Strategic Next Focus:`,
+        `-`,
+        ``,
+        FORMATTING_RULES,
+    ].join('\n');
 
-    // 1. Construct System Prompt (SYSTEM RULES & FORMAT)
-    const systemPrompt = `
-SYSTEM RULES:
-- Academic tone
-- Strategic exam-focused analysis
-- Structured output only
-- No motivational language
+    // 2. Input block with evidence hierarchy
+    let chunksText = chunkSummaries.map(c => `- ${c.summary_text}`).join('\n') || 'None';
+    let recentMessagesText = unchunkedMessages.map(m => `Q: ${m.question}\nA: ${m.answer}`).join('\n\n') || 'None';
 
-Strict output format:
+    let weakTopicEvidence = 'Weak Topic Evidence (Deterministic Analysis):\n';
+    weakTopicEvidence += weakTopics.length > 0
+        ? weakTopics.map((wt: any) => `- ${wt.topic} (frequency: ${wt.frequency})`).join('\n')
+        : 'None';
 
-Session Summary:
+    const historyPrompt = [
+        `INPUT BLOCK:`,
+        ``,
+        weakTopicEvidence,
+        ``,
+        `Chunk Memory Summaries:`,
+        chunksText,
+        ``,
+        `Recent Messages:`,
+        recentMessagesText,
+    ].join('\n');
 
-Core Topics Covered:
--
-
-Common Weak Areas (Evidence-Based):
-- Include topics from deterministic evidence if valid
-
-Frequently Repeated Themes:
--
-
-Strategic Next Focus:
--
-`.trim();
-
-    // Build hierarchical input blocks
-    let chunksText = chunkSummaries.map(c => `- ${c.summary_text}`).join('\n');
-    if (!chunksText) chunksText = "None";
-
-    let recentMessagesText = unchunkedMessages.map(m => `Q: ${m.question}\nA: ${m.answer}`).join('\n\n');
-    if (!recentMessagesText) recentMessagesText = "None";
-
-    // Build evidence block
-    let weakTopicEvidence = "Weak Topic Evidence (Deterministic Analysis):\n";
-    if (weakTopics && weakTopics.length > 0) {
-        weakTopicEvidence += weakTopics.map((wt: any) => `- ${wt.topic} (frequency: ${wt.frequency})`).join('\n');
-    } else {
-        weakTopicEvidence += "None";
-    }
-
-    // 2. Construct History Prompt (INPUT BLOCK)
-    const historyPrompt = `
-INPUT BLOCK:
-
-${weakTopicEvidence}
-
-Chunk Memory Summaries:
-${chunksText}
-
-Recent Messages:
-${recentMessagesText}
-`.trim();
-
-    // 3. Call AI Provider
     const startTime = Date.now();
     let aiResponse;
     try {
         aiResponse = await provider.generateResponse({
-            systemPrompt: systemPrompt,
+            systemPrompt,
             contextPrompt: historyPrompt,
-            userPrompt: input.question || "Generate session summary."
+            userPrompt: input.question || 'Generate session summary.'
         });
-
-        const durationMs = Date.now() - startTime;
-        logAIEvent({
-            type: "AI_CALL",
-            sessionId: sessionIdStr,
-            intent: input.intent,
-            durationMs,
-            metadata: {
-                responseLength: aiResponse.text.length
-            }
-        });
+        logAIEvent({ type: 'AI_CALL', sessionId: sessionIdStr, intent: input.intent, durationMs: Date.now() - startTime, metadata: { responseLength: aiResponse.text.length } });
     } catch (error: any) {
-        logAIEvent({
-            type: "AI_ERROR",
-            sessionId: sessionIdStr,
-            intent: input.intent,
-            metadata: {
-                error: error.message
-            }
-        });
+        logAIEvent({ type: 'AI_ERROR', sessionId: sessionIdStr, intent: input.intent, metadata: { error: error.message } });
         throw error;
     }
 
-    return {
-        answer: aiResponse.text,
-        confidence: "high",
-        sourcesUsed: []
-    };
+    return { answer: aiResponse.text, confidence: 'high', sourcesUsed: [] };
 };
 
-/**
- * Handler for 'pyq_answer_generation' intent.
- * Generates an answer formatted specifically based on marks weightage.
- */
+
+// ---------------------------------------------------------------------------
+// Intent: pyq_answer_generation
+// ---------------------------------------------------------------------------
+
 const handlePyqAnswerGeneration = async (input: AIEngineInput): Promise<AIEngineResponse> => {
-    const provider = new DummyAIProvider();
+    const provider = createLLMProvider();
     const { context } = input;
-    
+
     // Parse question and marks from JSON input
     let questionText = input.question;
-    let marks = null;
+    let marks: number | null = null;
     try {
         const parsed = JSON.parse(input.question);
         if (parsed.questionText) {
-             questionText = parsed.questionText;
-             marks = parsed.marks;
+            questionText = parsed.questionText;
+            marks = parsed.marks;
         }
     } catch (e) {
         // Fallback for raw string
@@ -570,15 +525,17 @@ const handlePyqAnswerGeneration = async (input: AIEngineInput): Promise<AIEngine
         };
     }
 
-    // 1. Construct System Prompt (SYSTEM RULES)
-    const systemPrompt = `
-You are an expert AI exam assistant. Your primary goal is to provide highly structured, marks-weighted answers for previous year questions (PYQs).
-- Academic and formal tone.
-- Adhere strictly to the formatting rules corresponding to the marks weightage.
-- Use the provided context materials as your primary source of truth.
-`.trim();
+    // 1. System Prompt
+    const systemPrompt = [
+        `You are an expert AI exam assistant. Your primary goal is to provide highly structured, marks-weighted answers for previous year questions (PYQs).`,
+        `- Academic and formal tone.`,
+        `- Adhere strictly to the formatting rules corresponding to the marks weightage.`,
+        `- Use the provided context materials as your primary source of truth.`,
+        ``,
+        FORMATTING_RULES,
+    ].join('\n');
 
-    // 2. Formatting rules based on marks
+    // 2. Marks-based formatting intent
     let intentPrompt = `Answer this question perfectly for the exam.\n`;
     if (marks) {
         if (marks <= 2) {
@@ -586,24 +543,16 @@ You are an expert AI exam assistant. Your primary goal is to provide highly stru
         } else if (marks <= 5) {
             intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a clear definition, 3-4 key bullet points, and a small example.\n`;
         } else if (marks <= 10) {
-            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a definition, step-by-step explanation, a text-based flowchart/diagram using standard characters, advantages/disadvantages, and a brief summary.\n`;
+            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a definition, step-by-step explanation, a text-based flowchart/diagram using ASCII characters (-->, ->, |, [Step]), advantages/disadvantages, and a brief summary.\n`;
         } else {
-            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a highly detailed explanation, a structured flowchart or diagram in text, comprehensive examples, comparison tables if applicable, and a strong conclusion.\n`;
+            intentPrompt += `Target Marks: ${marks}\nFormat Rule: Provide a highly detailed explanation, a structured ASCII flowchart or diagram, comprehensive examples, comparison tables if applicable, and a strong conclusion.\n`;
         }
     }
 
-    // 3. Inject relevant knowledge chunks (keyword-ranked)
-    let knowledgeBlock = '';
+    // 3. Hierarchical knowledge block (Syllabus → PYQ → Notes)
     const allChunks = context.knowledge?.chunks || [];
-    const relevantChunks = selectRelevantChunks(questionText, allChunks, 7);
-    if (relevantChunks.length > 0) {
-        const knowledgeText = relevantChunks
-            .map((chunk) => `[${chunk.topic}]\n${chunk.text}`)
-            .join('\n\n---\n\n');
-        knowledgeBlock = `\n\nKnowledge Base:\n${knowledgeText}`;
-    }
-
-    const contextPrompt = `Session Outline: ${context.sessionMeta.subject} \n${knowledgeBlock}`;
+    const knowledgeBlock = buildHierarchicalKnowledgeBlock(questionText, allChunks, 7);
+    const contextPrompt = `Session Outline: ${context.sessionMeta.subject}${knowledgeBlock}`;
 
     // 4. Call AI Provider
     const sessionId = context.sessionMeta.sessionId;

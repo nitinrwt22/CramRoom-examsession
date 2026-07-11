@@ -12,7 +12,8 @@ import {
     Download, Trash2, Plus, FileText, Loader2, LogOut, Send, Sparkles, 
     TrendingDown, TrendingUp, Minus, Upload, RefreshCw, AlertTriangle, 
     Zap, Link2, BookOpen, BarChart2, Folder, MessageSquare, Settings, 
-    UserPlus, Users, ChevronRight, CornerDownRight, Smile, Pin, PinOff
+    UserPlus, Users, ChevronRight, CornerDownRight, Smile, Pin, PinOff,
+    Info, Activity, Target, Clock
 } from 'lucide-react'
 import EmojiPicker, { Theme } from 'emoji-picker-react'
 import ExamCountdown from '@/components/session/ExamCountdown'
@@ -61,6 +62,17 @@ interface ProgressItem {
     currentScore: number
     previousScore?: number
     trend: 'improving' | 'worsening' | 'stable' | 'insufficient_data'
+}
+
+interface ExpectedQuestionMeta {
+    total: number
+    highly_expected_count: number
+    avg_mapping_confidence: number
+}
+
+interface ProgressMeta {
+    total: number
+    trends: Record<string, number>
 }
 
 interface TypingUser {
@@ -149,6 +161,12 @@ export default function SessionDetailPage() {
     const [expectedQuestions, setExpectedQuestions] = useState<any[]>([])
     const [expectedLoading, setExpectedLoading] = useState(true)
     const [pyqAnswers, setPyqAnswers] = useState<Record<string, {loading: boolean, answer: string | null}>>({})
+    const [expectedMeta, setExpectedMeta] = useState<ExpectedQuestionMeta | null>(null)
+    const [progressMeta, setProgressMeta] = useState<ProgressMeta | null>(null)
+
+    // Phase 5: Per-question tab state ('analytics' | 'answer')
+    const [questionTabMap, setQuestionTabMap] = useState<Record<string, 'analytics' | 'answer'>>({})
+    const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null)
 
     const handleGeneratePyqAnswer = async (q: any) => {
         if (pyqAnswers[q.id]?.answer || pyqAnswers[q.id]?.loading) return; 
@@ -240,6 +258,7 @@ export default function SessionDetailPage() {
             const response = await api.get(`/api/sessions/${params.id}/ai/progress`)
             const data = response.data
             setProgress(Array.isArray(data) ? data : (data?.progress || []))
+            if (data?.meta) setProgressMeta(data.meta)
         } catch (err) {
             console.error('Error fetching progress:', err)
         } finally {
@@ -252,10 +271,33 @@ export default function SessionDetailPage() {
         try {
             const response = await api.get(`/api/sessions/${params.id}/ai/expected-questions`)
             setExpectedQuestions(response.data.expectedQuestions || [])
+            if (response.data?.meta) setExpectedMeta(response.data.meta)
         } catch (err) {
             console.error('Error fetching expected questions:', err)
         } finally {
             setExpectedLoading(false)
+        }
+    }
+
+    // Phase 5: toggle question expansion and set default tab to 'analytics'
+    const handleToggleQuestion = (qId: string) => {
+        if (expandedQuestionId === qId) {
+            setExpandedQuestionId(null)
+        } else {
+            setExpandedQuestionId(qId)
+            // Default tab is analytics unless already set to answer
+            setQuestionTabMap(prev => ({
+                ...prev,
+                [qId]: prev[qId] || 'analytics'
+            }))
+        }
+    }
+
+    const handleSetQuestionTab = (qId: string, tab: 'analytics' | 'answer') => {
+        setQuestionTabMap(prev => ({ ...prev, [qId]: tab }))
+        // If switching to 'answer' and no answer yet, trigger generation
+        if (tab === 'answer') {
+            handleGeneratePyqAnswer({ id: qId, ...expectedQuestions.find(q => q.id === qId) })
         }
     }
 
@@ -581,12 +623,30 @@ export default function SessionDetailPage() {
         return `${diffDays} days left`
     }
 
-    const renderTrendIcon = (trend: string) => {
+    const renderTrendIcon = (trend: string, size?: string) => {
+        const cls = size || 'w-3 h-3'
         switch (trend) {
-            case 'improving': return <TrendingUp className="w-3 h-3 text-green-500" />
-            case 'worsening': return <TrendingDown className="w-3 h-3 text-red-500" />
-            default: return <Minus className="w-3 h-3 text-gray-400" />
+            case 'improving': return <TrendingUp className={`${cls} text-green-500`} />
+            case 'worsening': return <TrendingDown className={`${cls} text-red-500`} />
+            default: return <Minus className={`${cls} text-gray-400`} />
         }
+    }
+
+    const renderTrendLabel = (trend: string) => {
+        switch (trend) {
+            case 'improving':  return { label: 'Improving',   color: 'text-green-600 dark:text-green-400',  bg: 'bg-green-50 dark:bg-green-900/20' }
+            case 'worsening':  return { label: 'Worsening',   color: 'text-red-600 dark:text-red-400',     bg: 'bg-red-50 dark:bg-red-900/20' }
+            case 'stable':     return { label: 'Stable',      color: 'text-blue-600 dark:text-blue-400',   bg: 'bg-blue-50 dark:bg-blue-900/20' }
+            default:           return { label: 'No data',     color: 'text-gray-400',                      bg: 'bg-gray-100 dark:bg-white/5' }
+        }
+    }
+
+    // Phase 5: format mapping confidence as a human-readable label
+    const confidenceLabel = (c: number | null | undefined) => {
+        if (c == null) return { text: 'Unknown', color: 'text-gray-400', bg: 'bg-gray-100 dark:bg-white/5' }
+        if (c >= 0.8)  return { text: 'High',    color: 'text-emerald-700 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-900/20' }
+        if (c >= 0.5)  return { text: 'Medium',  color: 'text-amber-700 dark:text-amber-400',    bg: 'bg-amber-50 dark:bg-amber-900/20' }
+        return              { text: 'Low',     color: 'text-red-700 dark:text-red-400',      bg: 'bg-red-50 dark:bg-red-900/20' }
     }
 
     if (loading) {
@@ -825,18 +885,20 @@ export default function SessionDetailPage() {
                         </>
                     )}
 
-                    {/* ── EXPECTED QUESTIONS VIEW ── */}
+                    {/* ── EXPECTED QUESTIONS VIEW (Phase 5 — Analytics Tab Default) ── */}
                     {activeView === 'expected' && (
                         <div className="flex-1 overflow-y-auto p-6 lg:p-8">
                             <div className="max-w-4xl mx-auto">
-                                <div className="flex items-center justify-between mb-8">
+
+                                {/* Header + meta summary */}
+                                <div className="flex items-start justify-between mb-6">
                                     <div className="flex items-center gap-3">
                                         <div className="p-2.5 bg-amber-100 dark:bg-amber-900/30 rounded-xl flex items-center justify-center">
                                             <Sparkles className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                                         </div>
                                         <div>
                                             <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 tracking-tight">Predicted Questions</h2>
-                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">AI suggestions based on PYQ frequency & weak areas</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Evidence-ranked by PYQ frequency, recency &amp; topic confidence</p>
                                         </div>
                                     </div>
                                     <button onClick={fetchExpectedQuestions} disabled={expectedLoading} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-zinc-800 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#202022] transition-colors shadow-sm disabled:opacity-50">
@@ -844,6 +906,34 @@ export default function SessionDetailPage() {
                                         {expectedLoading ? 'Analyzing...' : 'Refresh'}
                                     </button>
                                 </div>
+
+                                {/* Phase 5: Session meta summary bar */}
+                                {expectedMeta && expectedQuestions.length > 0 && (
+                                    <div className="flex items-center gap-6 mb-6 px-5 py-3.5 bg-amber-50 dark:bg-amber-900/10 border border-amber-200/60 dark:border-amber-900/30 rounded-xl text-sm">
+                                        <div className="flex items-center gap-2">
+                                            <Target className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                                            <span className="text-gray-600 dark:text-gray-300 font-medium">
+                                                <span className="font-black text-gray-900 dark:text-white">{expectedMeta.total}</span> questions predicted
+                                            </span>
+                                        </div>
+                                        <div className="w-px h-4 bg-amber-200 dark:bg-amber-700" />
+                                        <div className="flex items-center gap-2">
+                                            <Zap className="w-4 h-4 text-red-500" />
+                                            <span className="text-gray-600 dark:text-gray-300 font-medium">
+                                                <span className="font-black text-gray-900 dark:text-white">{expectedMeta.highly_expected_count}</span> highly expected
+                                            </span>
+                                        </div>
+                                        <div className="w-px h-4 bg-amber-200 dark:bg-amber-700" />
+                                        <div className="flex items-center gap-2">
+                                            <Info className="w-4 h-4 text-blue-500" />
+                                            <span className="text-gray-600 dark:text-gray-300 font-medium">
+                                                Avg. confidence: <span className={`font-black ${confidenceLabel(expectedMeta.avg_mapping_confidence).color}`}>
+                                                    {Math.round(expectedMeta.avg_mapping_confidence * 100)}%
+                                                </span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {expectedLoading && expectedQuestions.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-gray-400">
@@ -861,69 +951,174 @@ export default function SessionDetailPage() {
                                 ) : (
                                     <div className="space-y-10">
                                         {['Highly Expected', 'Medium Probability', 'Low Probability'].map(probLabel => {
-                                            const questions = expectedQuestions.filter(q => q.probability === probLabel);
-                                            if (questions.length === 0) return null;
-                                            
-                                            const isHigh = probLabel === 'Highly Expected';
-                                            const isMed = probLabel === 'Medium Probability';
-                                            
+                                            const questions = expectedQuestions.filter(q => q.probability === probLabel)
+                                            if (questions.length === 0) return null
+                                            const isHigh = probLabel === 'Highly Expected'
+                                            const isMed  = probLabel === 'Medium Probability'
                                             return (
-                                                <div key={probLabel} className="space-y-4 animate-in fade-in slide-in-from-bottom-4">
+                                                <div key={probLabel} className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className={`h-5 w-1.5 rounded-full ${isHigh ? 'bg-red-500' : isMed ? 'bg-amber-500' : 'bg-blue-500'}`}></div>
                                                         <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">{probLabel}</h3>
                                                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400 ml-1">{questions.length}</span>
                                                     </div>
-                                                    
+
                                                     <div className="grid gap-3">
-                                                        {questions.map((q, idx) => {
-                                                            const ansState = pyqAnswers[q.id];
-                                                            const isExpanded = !!ansState;
+                                                        {questions.map((q) => {
+                                                            const isExpanded = expandedQuestionId === q.id
+                                                            const activeTab  = questionTabMap[q.id] || 'analytics'
+                                                            const ansState   = pyqAnswers[q.id]
+                                                            const cLabel     = confidenceLabel(q.mapping_confidence)
+
                                                             return (
-                                                                <div key={q.id} className="bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-zinc-800/60 rounded-xl overflow-hidden shadow-sm hover:border-gray-300 dark:hover:border-zinc-600 transition-colors group">
-                                                                    <div 
-                                                                        onClick={() => handleGeneratePyqAnswer(q)}
+                                                                <div key={q.id} id={`q-${q.id}`} className="bg-white dark:bg-[#1C1C1E] border border-gray-200 dark:border-zinc-800/60 rounded-xl overflow-hidden shadow-sm hover:border-gray-300 dark:hover:border-zinc-600 transition-colors group">
+
+                                                                    {/* Question header row — click to expand */}
+                                                                    <div
+                                                                        onClick={() => handleToggleQuestion(q.id)}
                                                                         className="p-4 sm:p-5 cursor-pointer flex gap-3 items-start"
                                                                     >
                                                                         <div className="flex-1 mt-0.5">
+                                                                            {/* Badge row */}
                                                                             <div className="flex flex-wrap items-center gap-2 mb-2">
                                                                                 <span className="text-[10px] font-bold text-gray-500 dark:text-gray-400 uppercase tracking-widest bg-gray-100 dark:bg-white/5 px-2 py-0.5 rounded-md">{q.topic}</span>
                                                                                 {q.year && <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-md">{q.year}</span>}
                                                                                 {q.marks && <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest bg-emerald-50 dark:bg-emerald-900/20 px-2 py-0.5 rounded-md">{q.marks} Marks</span>}
-                                                                                <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-md ml-auto flex items-center gap-1"><RefreshCw className="w-3 h-3"/> Repeated {q.frequency}x</span>
+                                                                                <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-widest bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-md ml-auto flex items-center gap-1">
+                                                                                    <RefreshCw className="w-3 h-3"/> {q.frequency}x
+                                                                                </span>
                                                                             </div>
                                                                             <p className="text-[15px] font-medium text-gray-800 dark:text-gray-200 leading-snug group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors pr-8">
                                                                                 {q.question_text}
                                                                             </p>
-                                                                            {!isExpanded && (
-                                                                                <div className="mt-4">
-                                                                                    <button 
-                                                                                        onClick={(e) => { e.stopPropagation(); handleGeneratePyqAnswer(q); }}
-                                                                                        className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors"
-                                                                                    >
-                                                                                        <Sparkles className="w-3.5 h-3.5" />
-                                                                                        Generate AI Answer
-                                                                                    </button>
-                                                                                </div>
-                                                                            )}
                                                                         </div>
                                                                         <div className="shrink-0 pt-1">
-                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isExpanded ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600'}`}>
-                                                                                {ansState?.loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Sparkles className="w-4 h-4" />}
+                                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                                                                                isExpanded ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-zinc-800 text-gray-400 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/30 group-hover:text-blue-600'
+                                                                            }`}>
+                                                                                <BarChart2 className="w-4 h-4" />
                                                                             </div>
                                                                         </div>
                                                                     </div>
-                                                                    
+
+                                                                    {/* Expanded panel */}
                                                                     {isExpanded && (
-                                                                        <div className="border-t border-gray-100 dark:border-zinc-800/60 bg-gray-50/50 dark:bg-[#141416]/50 p-5 animate-in slide-in-from-top-2 fade-in">
-                                                                            {ansState.loading ? (
-                                                                                <div className="flex items-center gap-3 text-gray-500">
-                                                                                    <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
-                                                                                    <span className="text-[13px] font-medium">Drafting structured {q.marks ? `${q.marks}-mark` : ''} answer...</span>
+                                                                        <div className="border-t border-gray-100 dark:border-zinc-800/60 animate-in slide-in-from-top-2 fade-in">
+
+                                                                            {/* Phase 5: Tab bar — Analytics is default */}
+                                                                            <div className="flex border-b border-gray-100 dark:border-zinc-800/60 bg-gray-50/80 dark:bg-[#1A1A1C]/80">
+                                                                                <button
+                                                                                    id={`q-tab-analytics-${q.id}`}
+                                                                                    onClick={(e) => { e.stopPropagation(); setQuestionTabMap(prev => ({ ...prev, [q.id]: 'analytics' })) }}
+                                                                                    className={`flex items-center gap-2 px-5 py-3 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+                                                                                        activeTab === 'analytics'
+                                                                                            ? 'border-amber-500 text-amber-700 dark:text-amber-400 bg-white dark:bg-[#1C1C1E]'
+                                                                                            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                                                                    }`}
+                                                                                >
+                                                                                    <BarChart2 className="w-3.5 h-3.5" /> Analytics
+                                                                                </button>
+                                                                                <button
+                                                                                    id={`q-tab-answer-${q.id}`}
+                                                                                    onClick={(e) => { e.stopPropagation(); handleSetQuestionTab(q.id, 'answer') }}
+                                                                                    className={`flex items-center gap-2 px-5 py-3 text-xs font-bold uppercase tracking-wider transition-colors border-b-2 ${
+                                                                                        activeTab === 'answer'
+                                                                                            ? 'border-blue-500 text-blue-700 dark:text-blue-400 bg-white dark:bg-[#1C1C1E]'
+                                                                                            : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                                                                    }`}
+                                                                                >
+                                                                                    <Sparkles className="w-3.5 h-3.5" /> AI Answer
+                                                                                </button>
+                                                                            </div>
+
+                                                                            {/* ── ANALYTICS TAB (default) ── */}
+                                                                            {activeTab === 'analytics' && (
+                                                                                <div className="p-5 bg-gray-50/50 dark:bg-[#141416]/50">
+                                                                                    <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-4 flex items-center gap-1.5">
+                                                                                        <Info className="w-3.5 h-3.5" /> Why this question is predicted
+                                                                                    </p>
+                                                                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                                                                                        {/* Frequency */}
+                                                                                        <div className="bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-zinc-800 rounded-xl p-3.5 flex flex-col gap-1">
+                                                                                            <div className="flex items-center gap-1.5 text-purple-500">
+                                                                                                <RefreshCw className="w-3.5 h-3.5" />
+                                                                                                <span className="text-[10px] font-bold uppercase tracking-wider">Frequency</span>
+                                                                                            </div>
+                                                                                            <p className="text-2xl font-black text-gray-900 dark:text-gray-100">{q.frequency}x</p>
+                                                                                            <p className="text-[10px] text-gray-400">appeared in past papers</p>
+                                                                                        </div>
+                                                                                        {/* Marks */}
+                                                                                        {q.marks && (
+                                                                                            <div className="bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-zinc-800 rounded-xl p-3.5 flex flex-col gap-1">
+                                                                                                <div className="flex items-center gap-1.5 text-emerald-500">
+                                                                                                    <Target className="w-3.5 h-3.5" />
+                                                                                                    <span className="text-[10px] font-bold uppercase tracking-wider">Marks</span>
+                                                                                                </div>
+                                                                                                <p className="text-2xl font-black text-gray-900 dark:text-gray-100">{q.marks}</p>
+                                                                                                <p className="text-[10px] text-gray-400">marks weightage</p>
+                                                                                            </div>
+                                                                                        )}
+                                                                                        {/* Recency Index */}
+                                                                                        <div className="bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-zinc-800 rounded-xl p-3.5 flex flex-col gap-1">
+                                                                                            <div className="flex items-center gap-1.5 text-blue-500">
+                                                                                                <Clock className="w-3.5 h-3.5" />
+                                                                                                <span className="text-[10px] font-bold uppercase tracking-wider">Recency</span>
+                                                                                            </div>
+                                                                                            <p className="text-2xl font-black text-gray-900 dark:text-gray-100">
+                                                                                                {q.recency_index != null ? `${Math.round(q.recency_index * 100)}%` : '—'}
+                                                                                            </p>
+                                                                                            <p className="text-[10px] text-gray-400">recency score</p>
+                                                                                        </div>
+                                                                                        {/* Mapping Confidence */}
+                                                                                        <div className="bg-white dark:bg-[#1C1C1E] border border-gray-100 dark:border-zinc-800 rounded-xl p-3.5 flex flex-col gap-1">
+                                                                                            <div className={`flex items-center gap-1.5 ${cLabel.color}`}>
+                                                                                                <Activity className="w-3.5 h-3.5" />
+                                                                                                <span className="text-[10px] font-bold uppercase tracking-wider">Confidence</span>
+                                                                                            </div>
+                                                                                            <p className={`text-2xl font-black ${cLabel.color}`}>
+                                                                                                {q.mapping_confidence != null ? `${Math.round(q.mapping_confidence * 100)}%` : '—'}
+                                                                                            </p>
+                                                                                            <p className="text-[10px] text-gray-400">topic mapping confidence</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                    {/* Year badge */}
+                                                                                    {q.year && (
+                                                                                        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                                                                                            <BookOpen className="w-3.5 h-3.5" />
+                                                                                            Last seen in <span className="font-bold text-blue-600 dark:text-blue-400 ml-1">{q.year}</span>
+                                                                                        </div>
+                                                                                    )}
+                                                                                    <p className="mt-4 text-[11px] text-gray-500 dark:text-gray-400 leading-relaxed border-t border-gray-100 dark:border-zinc-800 pt-3">
+                                                                                        This question scored <span className="font-bold text-gray-900 dark:text-gray-100">{q.frequency}x</span> across past papers
+                                                                                        {q.recency_index != null && ` with a recency score of ${Math.round(q.recency_index * 100)}%`}
+                                                                                        {q.mapping_confidence != null && ` and a ${cLabel.text.toLowerCase()} topic mapping confidence`}.
+                                                                                        Switch to the AI Answer tab when you are ready to study.
+                                                                                    </p>
                                                                                 </div>
-                                                                            ) : (
-                                                                                <div className="prose prose-sm dark:prose-invert max-w-none text-[14px] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
-                                                                                    {ansState.answer}
+                                                                            )}
+
+                                                                            {/* ── ANSWER TAB ── */}
+                                                                            {activeTab === 'answer' && (
+                                                                                <div className="p-5 bg-gray-50/50 dark:bg-[#141416]/50">
+                                                                                    {!ansState || ansState.loading ? (
+                                                                                        <div className="flex items-center gap-3 text-gray-500">
+                                                                                            <Loader2 className="w-5 h-5 animate-spin text-blue-500" />
+                                                                                            <span className="text-[13px] font-medium">Drafting structured {q.marks ? `${q.marks}-mark` : ''} answer...</span>
+                                                                                        </div>
+                                                                                    ) : ansState.answer ? (
+                                                                                        <div className="prose prose-sm dark:prose-invert max-w-none text-[14px] leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                                                                                            {ansState.answer}
+                                                                                        </div>
+                                                                                    ) : (
+                                                                                        <div className="text-center py-6">
+                                                                                            <button
+                                                                                                onClick={(e) => { e.stopPropagation(); handleGeneratePyqAnswer(q) }}
+                                                                                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium mx-auto transition-colors"
+                                                                                            >
+                                                                                                <Sparkles className="w-4 h-4" /> Generate AI Answer
+                                                                                            </button>
+                                                                                        </div>
+                                                                                    )}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -941,19 +1136,27 @@ export default function SessionDetailPage() {
                         </div>
                     )}
 
-                    {/* ── TOPICS VIEW ── */}
+                    {/* ── TOPICS VIEW (Phase 5 — Explainability Dashboard) ── */}
                     {activeView === 'topics' && (
                         <div className="flex-1 overflow-y-auto p-6 lg:p-8">
                             <div className="max-w-2xl mx-auto">
+
+                                {/* Header */}
                                 <div className="flex items-center justify-between mb-6">
-                                    <div className="flex items-center gap-2">
-                                        <AlertTriangle className="w-5 h-5 text-red-500" />
-                                        <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Weak Topics</h2>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <AlertTriangle className="w-5 h-5 text-red-500" />
+                                            <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">Weak Topic Analysis</h2>
+                                        </div>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-7">
+                                            Evidence-grounded confusion signals from your study session
+                                        </p>
                                     </div>
                                     <button onClick={fetchWeakTopics} disabled={weakTopicsLoading} className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 transition-colors">
                                         <RefreshCw className={`w-4 h-4 ${weakTopicsLoading ? 'animate-spin' : ''}`} /> Refresh
                                     </button>
                                 </div>
+
                                 {weakTopicsLoading ? (
                                     <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>
                                 ) : weakTopics.length === 0 ? (
@@ -963,30 +1166,105 @@ export default function SessionDetailPage() {
                                         <p className="text-sm mt-1">Ask more questions to get personalised insights.</p>
                                     </div>
                                 ) : (
-                                    <div className="space-y-3">
+                                    <div className="space-y-4">
                                         {weakTopics.map((topic, index) => {
-                                            const isHigh = index < 2;
+                                            const priority = index === 0 ? 'Very High' : index === 1 ? 'High' : index === 2 ? 'Medium' : 'Low'
+                                            const isHigh = index < 2
+                                            const progressMatch = progress.find(p => p.topic === topic.topic)
+                                            const trend = progressMatch?.trend
+
                                             return (
-                                                <div key={index} className={`flex items-center justify-between p-4 rounded-xl border ${
+                                                <div key={index} className={`rounded-2xl border overflow-hidden shadow-sm ${
                                                     isHigh
-                                                        ? 'bg-red-50 dark:bg-[#2A171C] border-red-200 dark:border-red-900/40'
+                                                        ? 'bg-red-50 dark:bg-[#2A171C]/80 border-red-200 dark:border-red-900/40'
                                                         : 'bg-white dark:bg-[#1A1A1C] border-gray-200 dark:border-white/5'
                                                 }`}>
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-2 h-2 rounded-full ${isHigh ? 'bg-red-500' : 'bg-gray-400'}`} />
-                                                        <span className={`font-semibold text-sm ${isHigh ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-300'}`}>
-                                                            {topic.topic}
-                                                        </span>
+                                                    {/* Topic Name Row */}
+                                                    <div className="flex items-center justify-between px-5 pt-5 pb-3">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-black ${
+                                                                isHigh
+                                                                    ? 'bg-red-500 text-white'
+                                                                    : 'bg-gray-200 dark:bg-zinc-700 text-gray-700 dark:text-gray-300'
+                                                            }`}>#{index + 1}</div>
+                                                            <div>
+                                                                <p className={`font-bold text-sm ${isHigh ? 'text-red-800 dark:text-red-300' : 'text-gray-800 dark:text-gray-100'}`}>
+                                                                    {topic.topic}
+                                                                </p>
+                                                                <p className="text-[10px] text-gray-500 dark:text-gray-500 font-medium uppercase tracking-widest mt-0.5">
+                                                                    Priority: {priority}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2 shrink-0">
+                                                            {trend && (
+                                                                <span className={`flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full ${
+                                                                    renderTrendLabel(trend).bg
+                                                                } ${renderTrendLabel(trend).color}`}>
+                                                                    {renderTrendIcon(trend)}
+                                                                    {renderTrendLabel(trend).label}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </div>
-                                                    <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+
+                                                    {/* Explainability Rationale Block */}
+                                                    <div className={`mx-4 mb-5 rounded-xl border p-4 ${
                                                         isHigh
-                                                            ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
-                                                            : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-zinc-400'
+                                                            ? 'bg-white dark:bg-black/20 border-red-100 dark:border-red-900/20'
+                                                            : 'bg-gray-50 dark:bg-white/3 border-gray-100 dark:border-white/5'
                                                     }`}>
-                                                        {topic.frequency}x
-                                                    </span>
+                                                        <div className="flex items-center gap-1.5 mb-3">
+                                                            <Info className="w-3.5 h-3.5 text-gray-400" />
+                                                            <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 dark:text-gray-400">Why this topic?</span>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <Activity className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                                                                <div>
+                                                                    <p className="text-[10px] text-gray-400 font-medium">Confusion score</p>
+                                                                    <p className="text-sm font-black text-gray-900 dark:text-gray-100">{topic.frequency}x</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <BarChart2 className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                                                                <div>
+                                                                    <p className="text-[10px] text-gray-400 font-medium">Mastery trend</p>
+                                                                    <p className={`text-sm font-black ${trend ? renderTrendLabel(trend).color : 'text-gray-400'}`}>
+                                                                        {trend ? renderTrendLabel(trend).label : 'Insufficient data'}
+                                                                    </p>
+                                                                </div>
+                                                            </div>
+                                                            {progressMatch && (
+                                                                <div className="flex items-center gap-2">
+                                                                    <Target className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                                                    <div>
+                                                                        <p className="text-[10px] text-gray-400 font-medium">Current score</p>
+                                                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{progressMatch.currentScore}%</p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                            {progressMatch?.previousScore !== undefined && (
+                                                                <div className="flex items-center gap-2">
+                                                                    <Clock className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+                                                                    <div>
+                                                                        <p className="text-[10px] text-gray-400 font-medium">Previous score</p>
+                                                                        <p className="text-sm font-black text-gray-900 dark:text-gray-100">{progressMatch.previousScore}%</p>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <p className={`mt-3 text-[11px] leading-relaxed ${
+                                                            isHigh ? 'text-red-700 dark:text-red-400' : 'text-gray-500 dark:text-gray-400'
+                                                        }`}>
+                                                            {isHigh
+                                                                ? `You've asked ${topic.frequency} confusion queries on this topic. Prioritise revision here before your exam.`
+                                                                : `This topic shows ${topic.frequency} confusion signal(s). Review when time allows.`
+                                                            }
+                                                        </p>
+                                                    </div>
                                                 </div>
-                                            );
+                                            )
                                         })}
                                     </div>
                                 )}
@@ -1510,7 +1788,7 @@ export default function SessionDetailPage() {
                         </div>
                     ) : (
                         <>
-                            {/* Weak Topics */}
+                            {/* Phase 5 — Weak Topics with Trend Icons */}
                             <Card className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
                         <CardHeader className="p-4 pb-3 flex flex-row items-center justify-between">
                             <div className="flex items-center gap-2">
@@ -1527,22 +1805,41 @@ export default function SessionDetailPage() {
                             ) : weakTopics.length === 0 ? (
                                 <p className="text-sm text-gray-500">No weak topics detected.</p>
                             ) : (
-                                <div className="flex flex-wrap gap-2">
+                                <div className="space-y-2">
                                     {weakTopics.map((topic, index) => {
-                                        // Alternate style to match the screenshot (some red, some grey)
-                                        const isRed = index < 2; 
+                                        const isRed = index < 2
+                                        const progressMatch = progress.find(p => p.topic === topic.topic)
+                                        const trend = progressMatch?.trend
                                         return (
-                                        <div
-                                            key={index}
-                                            className={`px-3 py-1 rounded-full text-[11px] font-bold uppercase tracking-wide border ${
-                                                isRed 
-                                                ? 'bg-red-50 dark:bg-[#2A171C] text-red-700 dark:text-[#D45B5B] border-red-200 dark:border-transparent' 
-                                                : 'bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-zinc-400 border-gray-200 dark:border-transparent'
-                                            }`}
-                                        >
-                                            {topic.topic}
-                                        </div>
-                                    )})}
+                                            <div
+                                                key={index}
+                                                className={`flex items-center justify-between px-3 py-2 rounded-xl border ${
+                                                    isRed
+                                                        ? 'bg-red-50 dark:bg-[#2A171C] border-red-200 dark:border-red-900/30'
+                                                        : 'bg-gray-50 dark:bg-zinc-900/50 border-gray-100 dark:border-zinc-800'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <span className={`text-[11px] font-bold uppercase tracking-wide truncate ${
+                                                        isRed ? 'text-red-700 dark:text-[#D45B5B]' : 'text-gray-700 dark:text-zinc-400'
+                                                    }`}>
+                                                        {topic.topic}
+                                                    </span>
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full shrink-0 ${
+                                                        isRed
+                                                            ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+                                                            : 'bg-gray-200 dark:bg-zinc-800 text-gray-500 dark:text-zinc-400'
+                                                    }`}>
+                                                        {topic.frequency}x
+                                                    </span>
+                                                </div>
+                                                {/* Phase 5 — Trend icon */}
+                                                <div className="shrink-0 ml-2" title={trend ? renderTrendLabel(trend).label : 'No trend data'}>
+                                                    {trend ? renderTrendIcon(trend, 'w-4 h-4') : <Minus className="w-4 h-4 text-gray-300" />}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
                                 </div>
                             )}
                         </CardContent>
@@ -1564,27 +1861,41 @@ export default function SessionDetailPage() {
                             </div>
                         ) : (
                             <div className="grid grid-cols-2 gap-3">
-                                {mainTopics.map((item, idx) => (
-                                    <div key={idx} className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-xl p-3.5 shadow-sm flex flex-col gap-3">
-                                        <div className="flex justify-between items-start">
-                                            <div className="w-8 h-8 rounded-md bg-gray-100 dark:bg-white/5 flex items-center justify-center shrink-0">
-                                                {idx % 2 === 0 ? <BarChart2 className="w-4 h-4 text-blue-500" /> : <Zap className="w-4 h-4 text-amber-500" />}
+                                {mainTopics.map((item, idx) => {
+                                    const tl = renderTrendLabel(item.trend)
+                                    const barColor = item.trend === 'improving' ? 'bg-green-500' :
+                                                     item.trend === 'worsening' ? 'bg-red-500' :
+                                                     idx % 2 === 0 ? 'bg-blue-500' : 'bg-amber-500'
+                                    return (
+                                        <div key={idx} className="bg-white dark:bg-[#1A1A1C] border border-gray-200 dark:border-white/5 rounded-xl p-3.5 shadow-sm flex flex-col gap-3">
+                                            <div className="flex justify-between items-start">
+                                                <div className="w-8 h-8 rounded-md bg-gray-100 dark:bg-white/5 flex items-center justify-center shrink-0">
+                                                    {idx % 2 === 0 ? <BarChart2 className="w-4 h-4 text-blue-500" /> : <Zap className="w-4 h-4 text-amber-500" />}
+                                                </div>
+                                                {/* Phase 5 — Trend icon + score */}
+                                                <div className="flex items-center gap-1 font-bold text-sm text-gray-900 dark:text-gray-100">
+                                                    {item.currentScore}% {renderTrendIcon(item.trend)}
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-1 font-bold text-sm text-gray-900 dark:text-gray-100">
-                                                {item.currentScore}% {renderTrendIcon(item.trend)}
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate mb-1" title={item.topic}>{item.topic}</p>
+                                                {/* Phase 5 — Trend label */}
+                                                <span className={`inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full mb-2 ${tl.bg} ${tl.color}`}>
+                                                    {renderTrendIcon(item.trend, 'w-2.5 h-2.5')} {tl.label}
+                                                </span>
+                                                <div className="h-1 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full rounded-full transition-all duration-500 ${barColor}`}
+                                                        style={{ width: `${item.currentScore}%` }}
+                                                    />
+                                                </div>
+                                                {item.previousScore !== undefined && (
+                                                    <p className="text-[9px] text-gray-400 mt-1">{item.previousScore}% → {item.currentScore}%</p>
+                                                )}
                                             </div>
                                         </div>
-                                        <div>
-                                            <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate mb-2" title={item.topic}>{item.topic}</p>
-                                            <div className="h-1 w-full bg-gray-100 dark:bg-white/10 rounded-full overflow-hidden">
-                                                <div 
-                                                    className={`h-full rounded-full ${idx % 2 === 0 ? 'bg-blue-500' : 'bg-amber-500'}`} 
-                                                    style={{ width: `${item.currentScore}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         )}
                     </div>
@@ -1647,7 +1958,7 @@ export default function SessionDetailPage() {
             <FileUploadModal
                 isOpen={isUploadModalOpen}
                 onClose={() => setIsUploadModalOpen(false)}
-                onUpload={handleUploadFile}
+                onUpload={handleUnifiedUpload}
             />
             <InvitePeerModal
                 isOpen={isInviteModalOpen}

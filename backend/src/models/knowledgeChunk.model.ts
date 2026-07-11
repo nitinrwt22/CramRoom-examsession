@@ -11,6 +11,11 @@ export interface KnowledgeChunk {
     file_id: string;
     topic: string;
     chunk_text: string;
+    /**
+     * Origin of the chunk — used for prompt grounding hierarchy:
+     *   'syllabus' (primary) → 'pyq' (evidence) → 'notes' (style/supporting)
+     */
+    source: 'syllabus' | 'pyq' | 'notes';
     created_at: Date;
 }
 
@@ -31,6 +36,7 @@ export const getKnowledgeChunksForSession = async (sessionId: number): Promise<K
                 p.id::text AS file_id,
                 COALESCE(t.name, p.title) AS topic,
                 rq.original_text AS chunk_text,
+                'pyq'::text AS source,
                 p.uploaded_at AS created_at
             FROM raw_questions rq
             JOIN papers p ON rq.paper_id = p.id
@@ -49,6 +55,7 @@ export const getKnowledgeChunksForSession = async (sessionId: number): Promise<K
                     WHEN array_length(t.subtopics, 1) > 0 THEN t.name || E'\nSubtopics:\n- ' || array_to_string(t.subtopics, E'\n- ')
                     ELSE t.name
                 END AS chunk_text,
+                'syllabus'::text AS source,
                 t.created_at
             FROM topics t
             JOIN syllabi s ON t.syllabus_id = s.id
@@ -71,6 +78,7 @@ export const getKnowledgeChunksForSession = async (sessionId: number): Promise<K
                     || 'Detailed text extraction is performed asynchronously '
                     || 'by the upload job worker.'
                     AS chunk_text,
+                'notes'::text AS source,
                 un.uploaded_at AS created_at
             FROM uploaded_notes un
             WHERE un.session_id = $1
@@ -103,6 +111,7 @@ export const getKnowledgeChunksByTopic = async (
                 p.id::text AS file_id,
                 COALESCE(t.name, p.title) AS topic,
                 rq.original_text AS chunk_text,
+                'pyq'::text AS source,
                 p.uploaded_at AS created_at
             FROM raw_questions rq
             JOIN papers p ON rq.paper_id = p.id
@@ -121,6 +130,7 @@ export const getKnowledgeChunksByTopic = async (
                     WHEN array_length(t.subtopics, 1) > 0 THEN t.name || E'\nSubtopics:\n- ' || array_to_string(t.subtopics, E'\n- ')
                     ELSE t.name
                 END AS chunk_text,
+                'syllabus'::text AS source,
                 t.created_at
             FROM topics t
             JOIN syllabi s ON t.syllabus_id = s.id
@@ -142,6 +152,7 @@ export const getKnowledgeChunksByTopic = async (
                     || 'Detailed text extraction is performed asynchronously '
                     || 'by the upload job worker.'
                     AS chunk_text,
+                'notes'::text AS source,
                 un.uploaded_at AS created_at
             FROM uploaded_notes un
             WHERE un.session_id = $1

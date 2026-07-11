@@ -1,6 +1,57 @@
 import pool from '../../config/database';
 import { detectFileType, extractText, normaliseToMarkdown, chunkByHeadings, parsePyqContent, extractSubtopics } from '../../utils/fileConverter.util';
 import fs from 'fs';
+
+// ---------------------------------------------------------------------------
+// Phase 4 Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * computeMappingConfidence()
+ *
+ * Calculates the heuristic keyword-overlap confidence that a raw question
+ * text was correctly mapped to a given topic name.
+ *
+ * Algorithm:
+ *   1. Tokenize both strings into lowercase words (≥ 3 chars, no stopwords).
+ *   2. Confidence = matching keywords / total unique question keywords.
+ *   3. Clamped to [0.000, 1.000], rounded to 3 decimal places.
+ *
+ * This satisfies TOPIC_SYSTEM_V2_DESIGN §4 Confidence Handling:
+ *   "Lexical Mapping: Confidence = matching keywords / total keywords"
+ *
+ * @param questionText - Raw question text
+ * @param topicName    - The topic name the question was mapped to
+ * @returns Confidence score [0.000 – 1.000]
+ */
+const MAPPING_STOPWORDS = new Set([
+    'a','an','the','is','are','was','were','be','been','of','in','on','at',
+    'by','for','with','and','but','or','not','to','do','did','has','have',
+    'from','this','that','which','what','how','why','when','where','give',
+    'write','list','find','show','explain','describe','define','calculate',
+]);
+
+export function computeMappingConfidence(questionText: string, topicName: string): number {
+    const tokenize = (text: string): string[] =>
+        text
+            .toLowerCase()
+            .replace(/[^a-z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter(w => w.length >= 3 && !MAPPING_STOPWORDS.has(w));
+
+    const questionTokens = new Set(tokenize(questionText));
+    const topicTokens    = new Set(tokenize(topicName));
+
+    if (questionTokens.size === 0) return 0.000;
+
+    let matches = 0;
+    for (const token of questionTokens) {
+        if (topicTokens.has(token)) matches++;
+    }
+
+    const raw = matches / questionTokens.size;
+    return parseFloat(Math.min(1, Math.max(0, raw)).toFixed(3));
+}
 import path from 'path';
 
 // ---------------------------------------------------------------------------
@@ -156,6 +207,17 @@ export const processJob = async (job: any) => {
                 [paperUuid, chunk.chunk_text, chunk.marks ?? null, topicUuid, canonicalUuid]
             );
             const rawUuid = rawInsert.rows[0].id;
+
+            // Phase 4: compute and persist mapping_confidence for this raw question.
+            // Uses keyword-overlap heuristic between the question text and its
+            // assigned topic name.  Score 0.000–1.000 (3 decimal places).
+            // Scores < 0.500 flag low-confidence mappings (per V2_DESIGN §9).
+            const topicNameForConfidence = chunk.topic ?? '';
+            const confidence = computeMappingConfidence(chunk.chunk_text, topicNameForConfidence);
+            await pool.query(
+                `UPDATE raw_questions SET mapping_confidence = $1 WHERE id = $2`,
+                [confidence, rawUuid]
+            );
 
             // Create question variant join
             await pool.query(
@@ -322,7 +384,31 @@ export const processJob = async (job: any) => {
             );
         }
 
-        // ── Question analytics rebuild ────────────────────────────────────────
+        // ── Question analytics rebuild (Phase 4) ──────────────────────────────
+        //
+        // Phase 4 addition: also populate recency_index per canonical question.
+        // Uses the same year-decay formula as topic analytics:
+        //   recency_index = max(0, 1.0 − 0.1 × (maxYear − questionLatestYear))
+        // This resolves the P1 risk flagged in the Phase 2 review.
+
+        // Pre-fetch the latest paper year for each canonical question in one query
+        // (avoids per-row N+1 queries).
+        const questionYearRes = await pool.query(
+            `SELECT qv.canonical_question_id, MAX(p.year) AS latest_year
+             FROM question_variants qv
+             JOIN raw_questions rq ON qv.raw_question_id = rq.id
+             JOIN papers p ON rq.paper_id = p.id
+             JOIN topics t ON rq.topic_id = t.id
+             JOIN syllabi s ON t.syllabus_id = s.id
+             WHERE s.session_id = $1
+               AND p.year IS NOT NULL
+             GROUP BY qv.canonical_question_id`,
+            [session_id]
+        );
+        const questionLatestYear = new Map<string, number>(
+            questionYearRes.rows.map((r: any) => [r.canonical_question_id, parseInt(r.latest_year, 10)])
+        );
+
         const questionsRes = await pool.query(
             `SELECT cq.id
              FROM canonical_questions cq
@@ -344,14 +430,23 @@ export const processJob = async (job: any) => {
             if (frequency >= 3) priorityLabel = 'High';
             else if (frequency >= 2) priorityLabel = 'Medium';
 
+            // Phase 4: Compute recency_index for this canonical question.
+            let qRecencyIndex = 0.00;
+            const qYear = questionLatestYear.get(qRow.id) ?? null;
+            if (qYear !== null && maxYear !== null) {
+                const yearDelta = maxYear - qYear;
+                qRecencyIndex = parseFloat(Math.max(0, 1.0 - yearDelta * 0.1).toFixed(2));
+            }
+
             await pool.query(
-                `INSERT INTO question_analytics (canonical_question_id, appearance_frequency, priority_label)
-                 VALUES ($1, $2, $3)
+                `INSERT INTO question_analytics (canonical_question_id, appearance_frequency, priority_label, recency_index)
+                 VALUES ($1, $2, $3, $4)
                  ON CONFLICT (canonical_question_id) DO UPDATE
                      SET appearance_frequency = EXCLUDED.appearance_frequency,
                          priority_label        = EXCLUDED.priority_label,
+                         recency_index         = EXCLUDED.recency_index,
                          last_rebuilt_at       = NOW()`,
-                [qRow.id, frequency, priorityLabel]
+                [qRow.id, frequency, priorityLabel, qRecencyIndex]
             );
         }
     }

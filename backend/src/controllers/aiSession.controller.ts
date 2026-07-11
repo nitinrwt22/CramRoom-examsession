@@ -8,7 +8,7 @@ import { getUnchunkedMessages, markMessagesAsChunked, saveChunkSummary } from '.
 import { detectWeakTopics } from '../services/ai/weakTopicAnalytics.service';
 import { getTopicProgressComparison } from '../services/ai/topicProgress.service';
 import { generateExpectedQuestions } from '../services/ai/pyqRecommendation.service';
-import { logAIEvent } from "../utils/aiLogger";
+import { logAIEvent } from '../utils/aiLogger';
 
 /**
  * Handles the AI query request for a specific session.
@@ -248,6 +248,18 @@ export const getWeakTopics = async (req: AuthRequest, res: Response): Promise<vo
 
 /**
  * Retrieves the topic progress comparison for a session.
+ *
+ * Response shape:
+ * {
+ *   meta: { total: number, trends: { improving: number, worsening: number, stable: number, insufficient_data: number } },
+ *   progress: TopicProgressEntry[]
+ * }
+ *
+ * Each TopicProgressEntry contains:
+ *   - topic           : string   — syllabus topic name
+ *   - currentScore    : number   — latest weak-topic confusion score
+ *   - previousScore   : number | null — previous snapshot score (null if first entry)
+ *   - trend           : 'improving' | 'worsening' | 'stable' | 'insufficient_data'
  */
 export const getTopicProgress = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -270,7 +282,15 @@ export const getTopicProgress = async (req: AuthRequest, res: Response): Promise
 
         const progress = await getTopicProgressComparison(sessionId);
 
-        res.status(200).json({ progress });
+        // Phase 4: build a meta summary so clients can render trend counts
+        // without having to aggregate the array themselves.
+        const trends = { improving: 0, worsening: 0, stable: 0, insufficient_data: 0 };
+        for (const entry of progress) {
+            trends[entry.trend]++;
+        }
+        const meta = { total: progress.length, trends };
+
+        res.status(200).json({ meta, progress });
 
     } catch (error: any) {
         console.error('Error in getTopicProgress:', error);
@@ -285,6 +305,22 @@ export const getTopicProgress = async (req: AuthRequest, res: Response): Promise
 
 /**
  * Retrieves the expected PYQs for a session.
+ *
+ * Phase 4 enriched payload:
+ * {
+ *   meta: {
+ *     total                : number  — total canonical questions returned
+ *     highly_expected_count: number  — count with probability === 'Highly Expected'
+ *     avg_mapping_confidence: number — session-wide avg confidence of topic mapping
+ *   },
+ *   expectedQuestions: ExpectedQuestion[]
+ * }
+ *
+ * Each ExpectedQuestion now includes:
+ *   - recency_index      : number (0.00 – 1.00) — how recently this question appeared in exams
+ *   - mapping_confidence : number (0.000 – 1.00) — heuristic confidence of topic mapping
+ *   - probability        : 'Highly Expected' | 'Medium Probability' | 'Low Probability'
+ *   - score              : number — composite ranking score
  */
 export const getExpectedQuestions = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
@@ -307,7 +343,23 @@ export const getExpectedQuestions = async (req: AuthRequest, res: Response): Pro
 
         const expectedQuestions = await generateExpectedQuestions(sessionId);
 
-        res.status(200).json({ expectedQuestions });
+        // Phase 4: build a meta summary for the dashboard.
+        const highlyExpectedCount = expectedQuestions.filter(
+            q => q.probability === 'Highly Expected'
+        ).length;
+        const avgMappingConfidence = expectedQuestions.length > 0
+            ? parseFloat(
+                (expectedQuestions.reduce((sum, q) => sum + q.mapping_confidence, 0) / expectedQuestions.length)
+                    .toFixed(3)
+              )
+            : 0;
+        const meta = {
+            total:                  expectedQuestions.length,
+            highly_expected_count:  highlyExpectedCount,
+            avg_mapping_confidence: avgMappingConfidence
+        };
+
+        res.status(200).json({ meta, expectedQuestions });
 
     } catch (error: any) {
         console.error('Error in getExpectedQuestions:', error);

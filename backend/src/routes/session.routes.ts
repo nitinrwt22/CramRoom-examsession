@@ -139,12 +139,17 @@ router.post('/:sessionId/ai/query', handleAIQuery);
 router.get('/:sessionId/ai/history', getSessionHistory);
 
 // GET /session/:sessionId/ai/weak-topics
+// Response: { weakTopics: WeakTopic[] }  — top 3 weak topics with scores
 router.get('/:sessionId/ai/weak-topics', getWeakTopics);
 
 // GET /session/:sessionId/ai/progress
+// Phase 4 Response: { meta: { total, trends }, progress: TopicProgressEntry[] }
+// trend values: 'improving' | 'worsening' | 'stable' | 'insufficient_data'
 router.get('/:sessionId/ai/progress', getTopicProgress);
 
 // GET /session/:sessionId/ai/expected-questions
+// Phase 4 Response: { meta: { total, highly_expected_count, avg_mapping_confidence }, expectedQuestions: ExpectedQuestion[] }
+// ExpectedQuestion includes: recency_index (0.00-1.00), mapping_confidence (0.000-1.000)
 router.get('/:sessionId/ai/expected-questions', getExpectedQuestions);
 
 export default router;

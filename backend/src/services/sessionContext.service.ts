@@ -32,6 +32,8 @@ export interface SessionContext {
         chunks: Array<{
             topic: string;
             text: string;
+            /** Origin of the chunk: 'syllabus' | 'pyq' | 'notes' */
+            source: 'syllabus' | 'pyq' | 'notes';
         }>;
     };
     recentHistory: Array<{
@@ -194,7 +196,8 @@ export const buildSessionContext = async (sessionId: string, userId: string): Pr
             knowledge: {
                 chunks: knowledgeChunks.map((kc) => ({
                     topic: kc.topic,
-                    text: kc.chunk_text
+                    text: kc.chunk_text,
+                    source: kc.source
                 }))
             },
             recentHistory,

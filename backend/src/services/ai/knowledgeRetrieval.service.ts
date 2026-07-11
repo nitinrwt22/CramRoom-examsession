@@ -31,6 +31,11 @@ const STOPWORDS = new Set([
 export interface RankedChunk {
     topic: string;
     text: string;
+    /**
+     * Origin of this chunk — determines grounding priority:
+     *   'syllabus' (Primary) → 'pyq' (Evidence) → 'notes' (Style/Supporting)
+     */
+    source: 'syllabus' | 'pyq' | 'notes';
     score: number;
 }
 
@@ -101,6 +106,7 @@ export function selectRelevantChunks(
     const ranked: RankedChunk[] = chunks.map(chunk => ({
         topic: chunk.topic,
         text: chunk.text,
+        source: (chunk as any).source ?? 'pyq',
         score: scoreChunk(chunk, keywords),
     }));
 
@@ -115,5 +121,60 @@ export function selectRelevantChunks(
     return ranked
         .filter(r => r.score > 0)
         .slice(0, topK)
-        .map(({ topic, text }) => ({ topic, text }));
+        .map(({ topic, text, source }) => ({ topic, text, source }));
+}
+
+/**
+ * The canonical hierarchy priority order for prompt grounding.
+ * Lower index = higher grounding priority.
+ */
+const SOURCE_PRIORITY: Record<'syllabus' | 'pyq' | 'notes', number> = {
+    syllabus: 0,
+    pyq: 1,
+    notes: 2,
+};
+
+/**
+ * Returns up to topK chunks selected by TF-IDF relevance, then
+ * **sorted by grounding hierarchy** (syllabus first, then pyq, then notes)
+ * so that prompt compilers can inject them in the correct priority order.
+ *
+ * If the question is empty, falls back to returning chunks in hierarchy order
+ * without keyword ranking.
+ *
+ * @param question - The user's raw question string
+ * @param chunks   - All available knowledge chunks (must carry a `source` field)
+ * @param topK     - Maximum total chunks to return (default: 6)
+ * @returns        - Chunks in hierarchy order, each carrying its source tag
+ */
+export function selectChunksBySource(
+    question: string,
+    chunks: { topic: string; text: string; source: 'syllabus' | 'pyq' | 'notes' }[],
+    topK = 6
+): { topic: string; text: string; source: 'syllabus' | 'pyq' | 'notes' }[] {
+    if (chunks.length === 0) return [];
+
+    const keywords = extractKeywords(question);
+
+    // Score every chunk (score = 0 if no usable keywords)
+    const scored: RankedChunk[] = chunks.map(chunk => ({
+        topic: chunk.topic,
+        text: chunk.text,
+        source: chunk.source,
+        score: keywords.length > 0 ? scoreChunk(chunk, keywords) : 1,
+    }));
+
+    // Sort: primary = descending relevance score; secondary = hierarchy tier
+    scored.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return SOURCE_PRIORITY[a.source] - SOURCE_PRIORITY[b.source];
+    });
+
+    const selected = scored.slice(0, topK);
+
+    // Re-sort the final selection strictly by hierarchy so the prompt
+    // compiler receives them in the correct injection order.
+    selected.sort((a, b) => SOURCE_PRIORITY[a.source] - SOURCE_PRIORITY[b.source]);
+
+    return selected.map(({ topic, text, source }) => ({ topic, text, source }));
 }
